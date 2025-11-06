@@ -8,6 +8,36 @@
 
 Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokujące konwersje i generuje konkretne zadania optymalizacyjne. Stworzony dla marketerów, którzy chcą szybko znaleźć quick wins i zwiększyć ROI kampanii.
 
+---
+
+## 📑 Spis treści
+
+- [✨ Co nowego w v1.5.2?](#-co-nowego-w-v152)
+- [🎯 Dla kogo?](#-dla-kogo)
+- [⚡ Quick Start](#-quick-start)
+- [📋 Co audytuje?](#-co-audytuje)
+- [📊 Wyniki](#-wyniki)
+- [📥 Instalacja](#-instalacja)
+- [⚙️ Konfiguracja](#️-konfiguracja)
+- [⏰ Automatyzacja](#-automatyzacja)
+- [💡 Przykłady użycia](#-przykłady-użycia)
+- [🎯 Najczęstsze problemy i rozwiązania](#-najczęstsze-problemy-i-rozwiązania)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [💎 Best Practices](#-best-practices)
+- [📊 Metryki i priorytety](#-metryki-i-priorytety)
+- [🔒 Bezpieczeństwo i jakość kodu](#-bezpieczeństwo-i-jakość-kodu)
+- [📝 Wymagania techniczne](#-wymagania-techniczne)
+- [🔄 Migracja z wcześniejszych wersji](#-migracja-z-wcześniejszych-wersji)
+- [⚠️ Ograniczenia](#️-ograniczenia)
+- [🤝 Współpraca](#-współpraca)
+- [💡 Sugestie dodatkowych funkcji](#-sugestie-dodatkowych-funkcji)
+- [❓ FAQ](#-faq)
+- [📊 Porównanie wersji](#-porównanie-wersji)
+- [📄 Licencja](#-licencja)
+- [🌟 Credits](#-credits)
+
+---
+
 ## ✨ Co nowego w v1.5.2?
 
 - ⚡ **Nowa funkcja parseNumeric()** - ujednolicone, bezpieczne parsowanie wszystkich liczb z API
