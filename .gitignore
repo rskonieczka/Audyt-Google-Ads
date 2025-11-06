@@ -25,3 +25,4 @@ test_output/
 # Personal configuration
 config.local.js
 audyt_konwersji_copy.js
+.gitignore
