@@ -3,7 +3,7 @@
  * SKRYPT AUDYTU GOOGLE ADS - MAKSYMALIZACJA KONWERSJI
  * ============================================================================
  * 
- * Wersja: 1.5.0 🎯
+ * Wersja: 1.5.2 ⚡
  * Data: 2025-11-06
  * 
  * Audytuje konto Google Ads pod kątem maksymalizacji konwersji.
@@ -17,10 +17,11 @@
  * 5. Raporty zapisują się w folderze "Audyty Google Ads"
  * 6. Kliknij linki w zadaniach - otwierają KONKRETNE kampanie!
  * 
- * Changelog v1.5.0:
- * - PRECYZYJNE linki do konkretnych kampanii!
- * - Link prowadzi bezpośrednio do kampanii z problemem
- * - Nie trzeba szukać - otwórz i napraw!
+ * Changelog v1.5.2:
+ * - OPTYMALIZACJA: Nowa funkcja parseNumeric() - ujednolicone parsowanie danych
+ * - OPTYMALIZACJA: LIMIT 5000 słów kluczowych (dla dużych kont)
+ * - PERFORMANCE: Sortowanie po Cost DESC w raportach
+ * - REFACTOR: Wyeliminowano duplikację kodu parsowania
  * 
  * ============================================================================
  */
@@ -30,15 +31,17 @@
 // ============================================================================
 
 var CONFIG = {
-  DAYS: 30,
+  DAYS: 30,                        // Okres analizy w dniach
   SPREADSHEET_NAME: 'Audyt Google Ads - Konwersje',
-  MIN_CONVERSIONS: 1,
-  MIN_CONVERSION_RATE: 0.01,
-  HIGH_COST_THRESHOLD: 100,
-  MIN_QUALITY_SCORE: 5,
-  LOW_QS_CRITICAL: 3,
-  MIN_CTR: 0.02,
-  BUDGET_THRESHOLD: 0.85
+  MIN_CONVERSIONS: 1,              // Min. konwersji do analizy
+  MIN_CONVERSION_RATE: 0.01,       // Min. CR = 1%
+  HIGH_COST_THRESHOLD: 100,        // Próg wysokich kosztów (PLN/EUR/USD)
+  MIN_QUALITY_SCORE: 5,            // Min. akceptowalny QS
+  LOW_QS_CRITICAL: 3,              // Krytycznie niski QS
+  MIN_CTR: 0.02,                   // Min. CTR = 2%
+  BUDGET_THRESHOLD: 0.85,          // Próg wykorzystania budżetu = 85%
+  KEYWORDS_LIMIT: 5000             // Max słów do audytu (sortowane po Cost DESC)
+                                   // Zwiększ dla bardzo dużych kont lub zmniejsz jeśli timeouty
 };
 
 // ============================================================================
@@ -144,6 +147,21 @@ function createProblem(priority, category, problem, impact, location, details, s
   };
 }
 
+function parseNumeric(value) {
+  // Ujednolicona funkcja parsowania liczb z API Google Ads
+  // Usuwa przecinki (separatory tysięcy) i parsuje do float
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+  
+  // Konwertuj do string i usuń przecinki
+  var cleaned = String(value).replace(/,/g, '');
+  var parsed = parseFloat(cleaned);
+  
+  // Zwróć 0 jeśli parsing się nie udał
+  return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed;
+}
+
 function safeFormat(value, decimals, suffix) {
   if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
     return '0' + (suffix ? ' ' + suffix : '');
@@ -231,21 +249,17 @@ function getAccountStats(days) {
       Logger.log('Raw Clicks: ' + rawClicks + ' (type: ' + typeof rawClicks + ')');
       Logger.log('Raw Cost: ' + rawCost + ' (type: ' + typeof rawCost + ')');
       
-      // Usuń przecinki z liczb (separator tysięcy) przed parsowaniem
-      var cleanConversions = String(rawConversions).replace(/,/g, '');
-      var cleanClicks = String(rawClicks).replace(/,/g, '');
-      var cleanCost = String(rawCost).replace(/,/g, '');
-      
-      stats.conversions = parseFloat(cleanConversions) || 0;
-      stats.clicks = parseInt(cleanClicks) || 0;
+      // Użyj funkcji parseNumeric do czyszczenia i parsowania
+      stats.conversions = parseNumeric(rawConversions);
+      stats.clicks = parseInt(parseNumeric(rawClicks)) || 0;
       
       // Google Ads API zwraca koszt już w PLN (nie w mikros!)
-      // Wystarczy parsować po usunięciu przecinków
-      stats.cost = parseFloat(cleanCost) || 0;
+      stats.cost = parseNumeric(rawCost);
       
-      Logger.log('=== PO CZYSZCZENIU ===');
-      Logger.log('Clean Cost: ' + cleanCost + ' (usunięto przecinki)');
-      Logger.log('Cost in PLN: ' + stats.cost.toFixed(2));
+      Logger.log('=== PO PARSOWANIU (parseNumeric) ===');
+      Logger.log('Parsed Conversions: ' + stats.conversions);
+      Logger.log('Parsed Clicks: ' + stats.clicks);
+      Logger.log('Parsed Cost: ' + stats.cost.toFixed(2) + ' PLN');
     } else {
       Logger.log('Brak danych statystyk - pusty raport');
     }
@@ -291,9 +305,7 @@ function getAccountStats(days) {
         var campaignRows = campaignReport.rows();
         while (campaignRows.hasNext()) {
           var campRow = campaignRows.next();
-          var campCostRaw = campRow['Cost'];
-          var campCostClean = String(campCostRaw).replace(/,/g, '');
-          var campCost = parseFloat(campCostClean) || 0;
+          var campCost = parseNumeric(campRow['Cost']);
           totalCostFromCampaigns += campCost;
         }
         
@@ -342,8 +354,8 @@ function auditConversionTracking(days) {
     var rows = report.rows();
     if (rows.hasNext()) {
       var row = rows.next();
-      totalConversions = parseFloat(row['Conversions']) || 0;
-      totalValue = parseFloat(row['ConversionValue']) || 0;
+      totalConversions = parseNumeric(row['Conversions']);
+      totalValue = parseNumeric(row['ConversionValue']);
     }
     
     if (totalConversions === 0) {
@@ -496,13 +508,13 @@ function auditBudgetsAndBidding(days) {
       var row = rows.next();
       var name = row['CampaignName'];
       var campaignId = row['CampaignId'];
-      var budget = parseFloat(String(row['Amount']).replace(/,/g, '')) || 0;
-      var cost = parseFloat(String(row['Cost']).replace(/,/g, '')) || 0;
-      var conversions = parseFloat(row['Conversions']);
-      var cr = parseFloat(row['ConversionRate'].replace('%', ''));
+      var budget = parseNumeric(row['Amount']);
+      var cost = parseNumeric(row['Cost']);
+      var conversions = parseNumeric(row['Conversions']);
+      var cr = parseNumeric(String(row['ConversionRate']).replace('%', ''));
       var budgetLostIS = row['SearchBudgetLostImpressionShare'];
       
-      budgetLostIS = budgetLostIS !== '--' ? parseFloat(budgetLostIS.replace('%', '')) : 0;
+      budgetLostIS = budgetLostIS !== '--' ? parseNumeric(String(budgetLostIS).replace('%', '')) : 0;
       
       if (budgetLostIS > 20 && cr > 3) {
         var lostConv = (budgetLostIS / 100) * conversions;
@@ -523,19 +535,39 @@ function auditBudgetsAndBidding(days) {
         ));
       }
       
-      var utilization = (cost / (budget * days)) * 100;
-      if (utilization < 50 && conversions < 1) {
+      // Walidacja przed dzieleniem - unikniecie dzielenia przez zero
+      var totalBudget = budget * days;
+      if (totalBudget > 0) {
+        var utilization = (cost / totalBudget) * 100;
+        
+        if (utilization < 50 && conversions < 1) {
+          problems.push(createProblem(
+            'MEDIUM',
+            'Budzety',
+            'Kampania "' + name + '" - niskie wykorzystanie budzetu',
+            'Tylko ' + utilization.toFixed(0) + '% budzetu, brak konwersji',
+            name,
+            {
+              utilization: utilization.toFixed(0) + '%',
+              budget: budget.toFixed(2) + ' PLN'
+            },
+            'Zoptymalizuj targeting lub realokuj budzet',
+            campaignId
+          ));
+        }
+      } else if (budget === 0 && cost > 0) {
+        // Kampania ma koszty ale budzet wynosi 0 - nietypowa sytuacja
         problems.push(createProblem(
           'MEDIUM',
           'Budzety',
-          'Kampania "' + name + '" - niskie wykorzystanie budzetu',
-          'Tylko ' + utilization.toFixed(0) + '% budzetu, brak konwersji',
+          'Kampania "' + name + '" - brak ustawionego budzetu',
+          'Kampania generuje koszty (' + cost.toFixed(2) + ' PLN) ale budzet = 0',
           name,
           {
-            utilization: utilization.toFixed(0) + '%',
-            budget: budget.toFixed(2) + ' PLN'
+            cost: cost.toFixed(2) + ' PLN',
+            budget: '0 PLN'
           },
-          'Zoptymalizuj targeting lub realokuj budzet',
+          'Ustaw odpowiedni dzienny budzet dla kampanii',
           campaignId
         ));
       }
@@ -558,12 +590,17 @@ function auditKeywords(days) {
   var dateTo = getDateStringDaysAgo(0);
   
   try {
+    // Limit słów dla optymalizacji wydajności (duże konta)
+    // Sortowanie po Cost DESC = audytujemy najdroższe słowa (Pareto 80/20)
+    // Możesz zmienić CONFIG.KEYWORDS_LIMIT jeśli potrzebujesz
     var report = AdsApp.report(
       'SELECT CampaignName, AdGroupName, Criteria, QualityScore, ' +
       'Clicks, Cost, Conversions, Ctr ' +
       'FROM KEYWORDS_PERFORMANCE_REPORT ' +
       'WHERE Impressions > 100 ' +
-      'DURING ' + dateFrom + ',' + dateTo
+      'DURING ' + dateFrom + ',' + dateTo + ' ' +
+      'ORDER BY Cost DESC ' +
+      'LIMIT ' + CONFIG.KEYWORDS_LIMIT
     );
     
     var lowQSCount = 0;
@@ -574,10 +611,10 @@ function auditKeywords(days) {
       var campaign = row['CampaignName'];
       var adGroup = row['AdGroupName'];
       var keyword = row['Criteria'];
-      var qs = parseInt(row['QualityScore']);
-      var clicks = parseInt(row['Clicks']);
-      var cost = parseFloat(String(row['Cost']).replace(/,/g, '')) || 0;
-      var conversions = parseFloat(row['Conversions']);
+      var qs = parseInt(parseNumeric(row['QualityScore']));
+      var clicks = parseInt(parseNumeric(row['Clicks']));
+      var cost = parseNumeric(row['Cost']);
+      var conversions = parseNumeric(row['Conversions']);
       
       if (qs > 0 && qs < CONFIG.MIN_QUALITY_SCORE) {
         lowQSCount++;
@@ -659,8 +696,8 @@ function auditAds(days) {
       var campaignId = row['CampaignId'];
       var adGroup = row['AdGroupName'];
       var status = row['Status'];
-      var ctr = parseFloat(row['Ctr'].replace('%', ''));
-      var clicks = parseInt(row['Clicks']);
+      var ctr = parseNumeric(String(row['Ctr']).replace('%', ''));
+      var clicks = parseInt(parseNumeric(row['Clicks']));
       
       var key = campaign + '|' + adGroup + '|' + campaignId;
       adGroupCounts[key] = (adGroupCounts[key] || 0) + 1;
@@ -802,14 +839,37 @@ function auditConflicts() {
     }
     
     for (var keyword in keywordMap) {
-      var cleanKeyword = keyword.replace(/[\[\]"]/g, '');
+      var cleanKeyword = keyword.replace(/[\[\]"]/g, '').toLowerCase().trim();
       
       for (var negative in negativeMap) {
-        var cleanNegative = negative.replace(/[\[\]"]/g, '');
+        var cleanNegative = negative.replace(/[\[\]"]/g, '').toLowerCase().trim();
         
-        if (cleanKeyword.indexOf(cleanNegative) > -1 || 
-            cleanNegative.indexOf(cleanKeyword) > -1) {
-          
+        // Sprawdz konflikt tylko gdy:
+        // 1. Slowa sa identyczne (exact match)
+        // 2. Negatywne slowo jest kompletnym wyrazem w pozytywnym (word boundary)
+        var hasConflict = false;
+        
+        if (cleanKeyword === cleanNegative) {
+          // Exact match - oczywisty konflikt
+          hasConflict = true;
+        } else {
+          // Sprawdz czy negatywne jest kompletnym slowem w pozytywnym
+          // Uzywamy word boundaries (\b) aby uniknac falszywych pozytywnych
+          try {
+            var regex = new RegExp('\\b' + cleanNegative.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+            if (regex.test(cleanKeyword)) {
+              hasConflict = true;
+            }
+          } catch(e) {
+            // Fallback dla nieprawidlowych regex (np. znaki specjalne)
+            // Tylko exact match
+            if (cleanKeyword === cleanNegative) {
+              hasConflict = true;
+            }
+          }
+        }
+        
+        if (hasConflict) {
           problems.push(createProblem(
             'HIGH',
             'Konflikty',
@@ -886,10 +946,10 @@ function auditPlacements(days) {
       var row = rows.next();
       var campaign = row['CampaignName'];
       var url = row['Criteria'];
-      var clicks = parseInt(row['Clicks']);
-      var cost = parseFloat(String(row['Cost']).replace(/,/g, '')) || 0;
-      var conversions = parseFloat(row['Conversions']);
-      var ctr = parseFloat(row['Ctr'].replace('%', ''));
+      var clicks = parseInt(parseNumeric(row['Clicks']));
+      var cost = parseNumeric(row['Cost']);
+      var conversions = parseNumeric(row['Conversions']);
+      var ctr = parseNumeric(String(row['Ctr']).replace('%', ''));
       
       totalPlacements++;
       
