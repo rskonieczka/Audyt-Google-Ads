@@ -49,11 +49,13 @@ Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokuj
 ## 🎯 Dla kogo?
 
 - **Performance Marketerzy** - szybka diagnostyka problemów z konwersjami
-- **Agencje PPC** - automatyzacja audytów klientów  
+- **Agencje PPC** - automatyzacja audytów klientów (wkrótce: wersja MCC dla wielu kont! 🏢)
 - **E-commerce** - optymalizacja kampanii produktowych
 - **Właściciele firm** - zrozumienie gdzie "leci" budżet
 
 ## ⚡ Quick Start
+
+### 📱 Wersja dla pojedynczego konta
 
 1. Skopiuj kod z [`audyt_konwersji.js`](audyt_konwersji.js)
 2. Wklej do Google Ads → Narzędzia → Skrypty → Nowy Skrypt
@@ -62,6 +64,54 @@ Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokuj
 5. 📁 Raporty zapisują się w folderze **"Audyty Google Ads"** w Google Drive
 
 **Gotowe!** Masz listę problemów posortowanych według wpływu na konwersje.
+
+### 🏢 Wersja MCC (dla agencji/wielu kont)
+
+**✅ Dostępna teraz (v1.6.0-beta)!** Umożliwia:
+- ✅ Audyt wszystkich kont klienta z poziomu MCC
+- ✅ Jeden skrypt → wiele kont (aktualizacja w jednym miejscu)
+- ✅ Porównanie performance między kontami
+- ✅ Osobne arkusze per konto lub raport zbiorczy
+- ✅ **Zaawansowane filtrowanie kont** - wybierz które konta audytować
+
+#### Filtrowanie kont MCC:
+
+**Whitelist** (audytuj TYLKO wybrane konta):
+```javascript
+ACCOUNT_STRATEGY: 'INCLUDE_ONLY',
+ACCOUNTS_TO_INCLUDE: ['123-456-7890', 'Klient ABC', 'Klient XYZ']
+```
+
+**Blacklist** (wyklucz z audytu):
+```javascript
+ACCOUNT_STRATEGY: 'EXCLUDE_ONLY',
+ACCOUNTS_TO_EXCLUDE: ['Test Account', 'DEMO', '999-888-7777']
+```
+
+**Smart** (automatyczne filtry - domyślne):
+```javascript
+ACCOUNT_STRATEGY: 'SMART',
+SMART_FILTERS: {
+  MIN_IMPRESSIONS: 100,        // Min. wyświetlenia (sprawdzane po selekcji)
+  MIN_SPEND: 50,               // Min. wydatki (sprawdzane po selekcji)
+  EXCLUDE_TEST_ACCOUNTS: true, // Pomija konta z "test", "demo"
+  ONLY_MANAGED: true           // Tylko konta zarządzane
+}
+```
+
+⚠️ Filtry MIN_IMPRESSIONS/MIN_SPEND wymagają sprawdzenia statystyk każdego konta (ograniczenie API).
+
+#### 🚀 Jak używać wersji MCC:
+
+1. Skopiuj kod z [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js) ← **GOTOWY PLIK!**
+2. Wklej do Google Ads MCC → Narzędzia → Skrypty → Nowy Skrypt
+3. Dostosuj `MCC_CONFIG` (linie 42-86) - wybierz strategię filtrowania
+4. Kliknij "Uruchom" lub "Podgląd"
+5. Sprawdź logi i linki do raportów
+
+📖 **Szczegóły:** [MCC_README.md](MCC_README.md) - pełna instrukcja konfiguracji
+
+👉 **Pytania?** [Otwórz dyskusję](../../discussions)
 
 ---
 
@@ -579,6 +629,36 @@ Poniżej lista potencjalnych rozszerzeń skryptu z uzasadnieniem biznesowym i te
 
 ### 🎯 Priorytet WYSOKI (najbardziej requested)
 
+#### 0. 🏢 Wersja MCC (Multi-account Manager) - 🚧 W ROZWOJU
+**Co będzie:**
+- Audyt wielu kont naraz z poziomu Manager Account
+- Porównanie performance między kontami klientów
+- Consolidated reporting lub osobne arkusze per konto
+- Bulk operations i centralne zarządzanie
+- **Zaawansowane filtrowanie kont** - 4 strategie:
+  - INCLUDE_ONLY - whitelist (tylko wybrane konta)
+  - EXCLUDE_ONLY - blacklist (wyklucz z audytu)
+  - SMART - automatyczne filtry (test accounts, min. spend)
+  - ALL - wszystkie konta bez filtrów
+
+**Dlaczego warto:**
+- Dla agencji zarządzających wieloma klientami
+- Oszczędność czasu - jeden skrypt w jednym miejscu
+- Cross-account insights i benchmarking
+- Elastyczne filtrowanie - pomijaj testy, nieaktywne
+- Jeden raport = wszystkie konta
+
+**Przykłady filtrowania:**
+- Agencja z 50 klientami → pomijaj test accounts automatycznie
+- Audytuj tylko TOP 5 klientów → whitelist
+- Wyklucz zawieszone projekty → blacklist
+
+**Potencjalny impact:** Agency-level efficiency - oszczędność 80% czasu na aktualizacje
+
+**Status:** ✅ Zaplanowane v1.6.0 (Q1 2026)
+
+---
+
 #### 1. 📊 Audyt rozszerzeń reklam (Ad Extensions)
 **Co sprawdzi:**
 - Kampanie bez sitelinks, callouts, structured snippets
@@ -728,23 +808,7 @@ Poniżej lista potencjalnych rozszerzeń skryptu z uzasadnieniem biznesowym i te
 
 ---
 
-#### 10. 🏢 Multi-account (MCC) Support
-**Co będzie:**
-- Audyt wielu kont naraz
-- Porównanie performance między kontami
-- Consolidated reporting
-- Bulk operations
-
-**Dlaczego warto:**
-- Dla agencji zarządzających wieloma klientami
-- Oszczędność czasu (jeden raport = wszystkie konta)
-- Cross-account insights
-
-**Potencjalny impact:** Agency-level efficiency
-
----
-
-#### 11. 🎯 Performance Max Campaign Audit
+#### 10. 🎯 Performance Max Campaign Audit
 **Co sprawdzi:**
 - Asset groups performance
 - Audience signals effectiveness
@@ -789,7 +853,8 @@ Poniżej lista potencjalnych rozszerzeń skryptu z uzasadnieniem biznesowym i te
 
 ### 📋 Krótkie Roadmap (najbliższe 3-6 miesięcy)
 
-#### v1.6.0 (Q1 2026)
+#### v1.6.0 (Q1 2026) - 🚧 W TRAKCIE
+- [x] 🏢 **Wersja MCC** - audyt wielu kont z poziomu Manager Account ✅ GOTOWE (beta)
 - [ ] Audyt rozszerzeń reklam
 - [ ] Search Terms Report analysis
 - [ ] Analiza urządzeń
@@ -836,6 +901,18 @@ A: Głównie poprawki stabilności - lepsze wykrywanie konfliktów, zabezpieczen
 
 **Q: Czy muszę aktualizować skrypt?**  
 A: Zalecane. v1.5.1 eliminuje potencjalne błędy runtime i fałszywe alarmy w wykrywaniu konfliktów.
+
+**Q: Czy jest wersja dla MCC (Manager Account)?**  
+A: Planowana w v1.6.0 (Q1 2026)! Umożliwi audyt wielu kont z poziomu MCC - jeden skrypt dla wszystkich klientów. [Śledź postępy w roadmap](#-krótkie-roadmap-najbliższe-3-6-miesięcy).
+
+**Q: Czy mogę używać skryptu dla wielu kont?**  
+A: Obecnie: musisz wkleić skrypt osobno w każdym koncie. Wkrótce: wersja MCC zrobi to automatycznie!
+
+**Q: Jak filtrować konta w wersji MCC?**  
+A: Wersja MCC (v1.6.0) będzie miała 4 strategie: INCLUDE_ONLY (whitelist), EXCLUDE_ONLY (blacklist), SMART (auto-filtrowanie testów/nieaktywnych), ALL (wszystkie). Zobacz [MCC_CONFIG_EXAMPLE.js](MCC_CONFIG_EXAMPLE.js) po szczegóły.
+
+**Q: Czy mogę pominąć konta testowe automatycznie?**  
+A: Tak! Ustaw SMART_FILTERS.EXCLUDE_TEST_ACCOUNTS = true i konta z "test", "demo", "sandbox" będą automatycznie pomijane.
 
 **Q: Czy skrypt śledzi moje dane?**  
 A: Absolutnie NIE. Kod jest open-source, możesz to zweryfikować. Wszystko działa lokalnie w Twoim Google Ads.
@@ -887,7 +964,8 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 **Wersja:** 1.5.2  
 **Ostatnia aktualizacja:** 06 Listopad 2025  
 **Status:** Production Ready - Aktywnie rozwijane  
-**Kod:** Open Source (MIT License)
+**Kod:** Open Source (MIT License)  
+**Nadchodzi:** v1.6.0 - Wersja MCC (Q1 2026) 🏢
 
 ### Changelog v1.5.2 (06.11.2025):
 - ⚡ Performance: Nowa funkcja parseNumeric() - ujednolicone parsowanie (21 miejsc)

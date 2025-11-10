@@ -593,6 +593,7 @@ function auditKeywords(days) {
     // Limit słów dla optymalizacji wydajności (duże konta)
     // Sortowanie po Cost DESC = audytujemy najdroższe słowa (Pareto 80/20)
     // Możesz zmienić CONFIG.KEYWORDS_LIMIT jeśli potrzebujesz
+    // UWAGA: W AWQL LIMIT wymaga dwóch parametrów: LIMIT startIndex, numberOfRows
     var report = AdsApp.report(
       'SELECT CampaignName, AdGroupName, Criteria, QualityScore, ' +
       'Clicks, Cost, Conversions, Ctr ' +
@@ -600,7 +601,7 @@ function auditKeywords(days) {
       'WHERE Impressions > 100 ' +
       'DURING ' + dateFrom + ',' + dateTo + ' ' +
       'ORDER BY Cost DESC ' +
-      'LIMIT ' + CONFIG.KEYWORDS_LIMIT
+      'LIMIT 0, ' + CONFIG.KEYWORDS_LIMIT
     );
     
     var lowQSCount = 0;
