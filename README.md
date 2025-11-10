@@ -9,7 +9,7 @@
 
 Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokujące konwersje i generuje konkretne zadania optymalizacyjne. Stworzony dla marketerów, którzy chcą szybko znaleźć quick wins i zwiększyć ROI kampanii.
 
-> 🏢 **NOWOŚĆ:** Wersja MCC dla agencji! Audytuj wiele kont z jednego miejsca → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js) | [📖 Instalacja](INSTALACJA_MCC.md)
+> 🏢 **NOWOŚĆ:** Wersja MCC dla agencji! Audytuj wiele kont z jednego miejsca → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js) (plik ukryty, tylko dla klientów agencyjnych) | [📖 Instalacja](INSTALACJA_MCC.md)
 
 ---
 
