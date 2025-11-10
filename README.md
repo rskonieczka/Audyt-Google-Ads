@@ -48,7 +48,7 @@ Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokuj
 - 🎯 **4 strategie filtrowania** - whitelist, blacklist, smart, all
 - 📊 **2 tryby raportowania** - osobne arkusze lub raport zbiorczy
 - 📁 **Link do folderu od razu w logach** - łatwy dostęp do raportów
-- ✅ **1857 linii kodu gotowego do copy-paste** → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js)
+- ✅ **1857 linii kodu gotowego do copy-paste** → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js)(plik ukryty, tylko dla klientów agencyjnych)
 
 ### 🔧 Poprawki i optymalizacje:
 - ✅ Naprawiono błąd AWQL LIMIT clause (dla dużych kont)
