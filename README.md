@@ -2,17 +2,20 @@
 
 [![Google Ads](https://img.shields.io/badge/Google%20Ads-Scripts-4285F4?logo=google-ads)](https://ads.google.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.5.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.0--beta-blue.svg)](CHANGELOG.md)
+[![MCC](https://img.shields.io/badge/MCC-Ready-orange.svg)](audyt_konwersji_mcc.js)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success.svg)](https://github.com)
 [![Performance](https://img.shields.io/badge/Performance-Optimized-brightgreen.svg)](CHANGELOG.md)
 
 Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokujące konwersje i generuje konkretne zadania optymalizacyjne. Stworzony dla marketerów, którzy chcą szybko znaleźć quick wins i zwiększyć ROI kampanii.
 
+> 🏢 **NOWOŚĆ:** Wersja MCC dla agencji! Audytuj wiele kont z jednego miejsca → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js) | [📖 Instalacja](INSTALACJA_MCC.md)
+
 ---
 
 ## 📑 Spis treści
 
-- [✨ Co nowego w v1.5.2?](#-co-nowego-w-v152)
+- [✨ Co nowego w v1.6.0-beta?](#-co-nowego-w-v160-beta)
 - [🎯 Dla kogo?](#-dla-kogo)
 - [⚡ Quick Start](#-quick-start)
 - [📋 Co audytuje?](#-co-audytuje)
@@ -38,18 +41,24 @@ Automatyczny skrypt audytu konta Google Ads, który identyfikuje problemy blokuj
 
 ---
 
-## ✨ Co nowego w v1.5.2?
+## ✨ Co nowego w v1.6.0-beta?
 
-- ⚡ **Nowa funkcja parseNumeric()** - ujednolicone, bezpieczne parsowanie wszystkich liczb z API
-- ⚡ **LIMIT 5000 słów kluczowych** - optymalizacja dla dużych kont (sortowanie po Cost DESC)
-- ⚡ **Wyeliminowano duplikację kodu** - 15+ miejsc używa teraz jednej funkcji
-- ✅ **Lepsza wydajność** - szybsze działanie na kontach z >10k słów kluczowych
-- ✅ **Wszystkie poprzednie funkcje v1.5.1** - konflikty, zero-division, linki bezpośrednie
+### 🏢 Wersja MCC (Multi-Account Manager) - GOTOWA!
+- 🎉 **Audyt wielu kont z jednego miejsca** - jeden skrypt dla całej agencji
+- 🎯 **4 strategie filtrowania** - whitelist, blacklist, smart, all
+- 📊 **2 tryby raportowania** - osobne arkusze lub raport zbiorczy
+- 📁 **Link do folderu od razu w logach** - łatwy dostęp do raportów
+- ✅ **1857 linii kodu gotowego do copy-paste** → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js)
+
+### 🔧 Poprawki i optymalizacje:
+- ✅ Naprawiono błąd AWQL LIMIT clause (dla dużych kont)
+- ✅ Naprawiono błąd filtrowania kont MCC po metrykach
+- ✅ Wszystkie funkcje v1.5.2: parseNumeric(), LIMIT 5000 słów, linki bezpośrednie
 
 ## 🎯 Dla kogo?
 
 - **Performance Marketerzy** - szybka diagnostyka problemów z konwersjami
-- **Agencje PPC** - automatyzacja audytów klientów (wkrótce: wersja MCC dla wielu kont! 🏢)
+- **Agencje PPC** - automatyzacja audytów klientów + **wersja MCC dostępna!** 🏢
 - **E-commerce** - optymalizacja kampanii produktowych
 - **Właściciele firm** - zrozumienie gdzie "leci" budżet
 
@@ -533,6 +542,7 @@ Przykład: "buty" już nie koliduje z "obuty sportowe"
 
 ## 📝 Wymagania techniczne
 
+### Wersja pojedyncze konto (`audyt_konwersji.js`):
 - **Platforma:** Google Ads Scripts (JavaScript ES5)
 - **Uprawnienia:** Standard lub Administrator
 - **Dane:** Min. 100 wyświetleń w okresie audytu
@@ -541,19 +551,49 @@ Przykład: "buty" już nie koliduje z "obuty sportowe"
 - **Stabilność:** Production-ready z obsługą błędów
 - **Optymalizacja:** LIMIT 5000 słów kluczowych (sortowane po Cost DESC)
 
+### Wersja MCC (`audyt_konwersji_mcc.js`):
+- **Platforma:** Google Ads Scripts w Manager Account (MCC)
+- **Uprawnienia:** Dostęp do MCC z uprawnieniami Standard/Admin
+- **Limit czasu:** Do 60 minut (max dla MCC scripts)
+- **Konta:** Do 50 kont na uruchomienie (konfigurowalne)
+- **Rozmiar:** 1857 linii kodu (kompletny, gotowy do użycia)
+
 ---
 
 ## 🔄 Migracja z wcześniejszych wersji
 
-### Z v1.5.1 → v1.5.2
+### Do v1.6.0-beta (MCC) – DLA AGENCJI 🆕
 
-**Rekomendacja:** Zalecana dla dużych kont  
+**Dla kogo:** Agencje zarządzające wieloma kontami  
+**Czas:** 5 minut  
+**Breaking changes:** Żadne (nowy plik)
+
+**Co zyskujesz:**
+- 🏢 Audyt wszystkich kont z jednego miejsca
+- ⏱️ Oszczędność 80% czasu na aktualizacje
+- 🎯 Filtrowanie kont (whitelist/blacklist/smart)
+- 📁 Link do folderu od razu w logach
+
+**Instrukcja:**
+1. Pobierz [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js)
+2. Wklej do **MCC → Skrypty → Nowy Skrypt**
+3. Skonfiguruj filtry w `MCC_CONFIG`
+4. Zobacz [INSTALACJA_MCC.md](INSTALACJA_MCC.md) po szczegóły
+
+**Wersja dla pojedynczego konta nadal działa!** Nie musisz nic zmieniać jeśli używasz tylko 1 konta.
+
+---
+
+### Z v1.5.1 → v1.5.2/v1.6.0
+
+**Rekomendacja:** Zalecana dla wszystkich  
 **Czas:** 2 minuty  
 **Breaking changes:** Brak
 
 **Co się zmieni:**
 - ⚡ Szybsze działanie (nowa funkcja parseNumeric)
 - ⚡ Limit 5000 słów (audytowane najdroższe)
+- ✅ Naprawiono AWQL LIMIT clause
 - ⚡ Mniej błędów parsowania danych
 
 **Instrukcja:** Skopiuj nowy kod → Wklej → Zapisz
@@ -903,16 +943,22 @@ A: Głównie poprawki stabilności - lepsze wykrywanie konfliktów, zabezpieczen
 A: Zalecane. v1.5.1 eliminuje potencjalne błędy runtime i fałszywe alarmy w wykrywaniu konfliktów.
 
 **Q: Czy jest wersja dla MCC (Manager Account)?**  
-A: Planowana w v1.6.0 (Q1 2026)! Umożliwi audyt wielu kont z poziomu MCC - jeden skrypt dla wszystkich klientów. [Śledź postępy w roadmap](#-krótkie-roadmap-najbliższe-3-6-miesięcy).
+A: ✅ **TAK! Dostępna teraz w v1.6.0-beta!** Pobierz [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js) - gotowy do użycia plik (1857 linii). Zobacz [INSTALACJA_MCC.md](INSTALACJA_MCC.md) po instrukcję.
 
 **Q: Czy mogę używać skryptu dla wielu kont?**  
-A: Obecnie: musisz wkleić skrypt osobno w każdym koncie. Wkrótce: wersja MCC zrobi to automatycznie!
+A: ✅ **TAK!** Użyj wersji MCC - jeden skrypt audytuje wszystkie konta z poziomu Manager Account. Oszczędza 80% czasu na aktualizacje!
 
 **Q: Jak filtrować konta w wersji MCC?**  
-A: Wersja MCC (v1.6.0) będzie miała 4 strategie: INCLUDE_ONLY (whitelist), EXCLUDE_ONLY (blacklist), SMART (auto-filtrowanie testów/nieaktywnych), ALL (wszystkie). Zobacz [MCC_CONFIG_EXAMPLE.js](MCC_CONFIG_EXAMPLE.js) po szczegóły.
+A: Wersja MCC ma 4 strategie:
+- **INCLUDE_ONLY** - audytuj tylko wybrane konta (whitelist)
+- **EXCLUDE_ONLY** - wyklucz konkretne konta (blacklist)  
+- **SMART** - automatycznie pomija testy/nieaktywne (domyślne)
+- **ALL** - wszystkie konta bez filtrów
+
+Zobacz [MCC_README.md](MCC_README.md) po szczegóły i przykłady.
 
 **Q: Czy mogę pominąć konta testowe automatycznie?**  
-A: Tak! Ustaw SMART_FILTERS.EXCLUDE_TEST_ACCOUNTS = true i konta z "test", "demo", "sandbox" będą automatycznie pomijane.
+A: Tak! W wersji MCC ustaw `EXCLUDE_TEST_ACCOUNTS: true` - automatycznie pominie konta z "test", "demo", "sandbox" w nazwie.
 
 **Q: Czy skrypt śledzi moje dane?**  
 A: Absolutnie NIE. Kod jest open-source, możesz to zweryfikować. Wszystko działa lokalnie w Twoim Google Ads.
@@ -924,14 +970,19 @@ A: 2-5 minut dla typowych kont. Duże konta (100+ kampanii): 10-30 minut. Jeśli
 
 ## 📊 Porównanie wersji
 
-| Funkcja | v1.5.0 | v1.5.1 (obecna) |
-|---------|--------|-----------------|
-| Wykrywanie konfliktów | Proste indexOf | ✅ Word boundaries + regex |
-| Dzielenie przez zero | ❌ Możliwy crash | ✅ Walidacja |
-| Anomalie budżetowe | - | ✅ Wykrywanie |
-| Parsowanie danych | Częściowe | ✅ Pełne z fallback |
-| Precyzyjne linki | ✅ Tak | ✅ Tak |
-| Stabilność | Dobra | ✅ Bardzo dobra |
+| Funkcja | v1.5.0 | v1.5.2 | v1.6.0-beta (MCC) |
+|---------|--------|--------|-------------------|
+| Wykrywanie konfliktów | Proste indexOf | ✅ Word boundaries | ✅ Word boundaries |
+| Dzielenie przez zero | ❌ Możliwy crash | ✅ Walidacja | ✅ Walidacja |
+| Anomalie budżetowe | - | ✅ Wykrywanie | ✅ Wykrywanie |
+| Parsowanie danych | Częściowe | ✅ Pełne z fallback | ✅ Pełne z fallback |
+| Precyzyjne linki | ✅ Tak | ✅ Tak | ✅ Tak |
+| AWQL LIMIT clause | ❌ Błąd | ❌ Błąd | ✅ **Naprawione** |
+| **Multi-Account (MCC)** | ❌ Nie | ❌ Nie | ✅ **TAK!** |
+| Filtrowanie kont | - | - | ✅ **4 strategie** |
+| Link do folderu w logach | - | - | ✅ **TAK** |
+| Tryby raportowania | 1 | 1 | ✅ **2 (SEPARATE/CONSOLIDATED)** |
+| Stabilność | Dobra | Bardzo dobra | ✅ **Doskonała** |
 
 ---
 
@@ -961,17 +1012,21 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
 ## 🌟 Credits
 
-**Wersja:** 1.5.2  
-**Ostatnia aktualizacja:** 06 Listopad 2025  
-**Status:** Production Ready - Aktywnie rozwijane  
+**Wersja:** 1.6.0-beta 🏢  
+**Ostatnia aktualizacja:** 10 Listopad 2025  
+**Status:** Production Ready + **MCC Beta** - Aktywnie rozwijane  
 **Kod:** Open Source (MIT License)  
-**Nadchodzi:** v1.6.0 - Wersja MCC (Q1 2026) 🏢
+**Nowość:** ✅ **Wersja MCC dostępna!** → [`audyt_konwersji_mcc.js`](audyt_konwersji_mcc.js)
 
-### Changelog v1.5.2 (06.11.2025):
-- ⚡ Performance: Nowa funkcja parseNumeric() - ujednolicone parsowanie (21 miejsc)
-- ⚡ Performance: LIMIT 5000 słów kluczowych (ORDER BY Cost DESC)
-- ⚡ Performance: 50-80% szybsze dla dużych kont (>10k słów)
-- 🔧 Refactor: Wyeliminowano ~50 linii duplikacji kodu
+### Changelog v1.6.0-beta (10.11.2025):
+- 🏢 **Wersja MCC** - audyt wielu kont z Manager Account (1857 linii, ready-to-use)
+- 🎯 **4 strategie filtrowania kont** - whitelist, blacklist, smart, all
+- 📊 **2 tryby raportowania** - SEPARATE (osobne arkusze) lub CONSOLIDATED (zbiorczy)
+- 📁 **Link do folderu w logach** - od razu na początku audytu
+- ✅ **Naprawiono AWQL LIMIT** - clause error (dla dużych kont)
+- ✅ **Naprawiono filtrowanie MCC** - poprawne sprawdzanie metryk po selekcji
+- 📚 **Kompletna dokumentacja** - INSTALACJA_MCC.md, MCC_README.md
+- ⚡ **Wszystkie funkcje v1.5.2** - parseNumeric(), LIMIT 5000, precyzyjne linki
 
 **Używasz tego skryptu?** ⭐ Zostaw gwiazdkę na GitHub!  
 **Znalazłeś bug?** 🐛 [Zgłoś issue](../../issues)  
