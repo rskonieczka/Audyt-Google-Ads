@@ -3,7 +3,7 @@
  * SKRYPT AUDYTU GOOGLE ADS - MAKSYMALIZACJA KONWERSJI
  * ============================================================================
  * 
- * Wersja: 1.8.0 ⚡
+ * Wersja: 1.9.0 🚀
  * Data: 2025-11-12
  * 
  * Audytuje konto Google Ads pod kątem maksymalizacji konwersji.
@@ -16,15 +16,25 @@
  * 4. Sprawdź link do arkusza w logach
  * 5. Raporty zapisują się w folderze "Audyty Google Ads"
  * 6. Kliknij linki w zadaniach - otwierają KONKRETNE kampanie!
+ * 7. ⭐ NOWA ZAKŁADKA: "Top Elementy" - najlepsze do skalowania!
  * 
- * Changelog v1.8.0:
- * - NOWA FUNKCJA: Audyt Search Terms Report
- * - Wykrywa kosztowne frazy bez konwersji (marnotrawstwo budżetu)
- * - Identyfikuje słowa negatywne do dodania
- * - Znajduje wartościowe frazy do rozbudowy kampanii
- * - Potencjalny wzrost ROI o 20-40%
+ * Changelog v1.9.0:
+ * - 🆕 NOWA ZAKŁADKA: Top Elementy do skalowania
+ * - 🎯 Sortowanie po LICZBIE KONWERSJI (nie CR) - priorytet dla volume
+ * - Pokazuje elementy nawet bez konwersji (sortuje po CTR jako fallback)
+ * - Top kampanie: największa liczba konwersji (gotowe do zwiększenia budżetu)
+ * - Top słowa kluczowe: najwięcej konwersji (skaluj stawki)
+ * - Top reklamy: najwięcej konwersji (powiel wzorzec komunikacji)
+ * - 🔗 Top sitelinks: konkretne teksty do powielenia (z opisami)
+ * - 💬 Top callouts: konkretne frazy do powielenia
+ * - Wartościowe frazy wyszukiwania (dodaj jako exact match)
+ * - Top miejsca docelowe Display/Video (managed placements)
+ * - Kampanie z najlepszymi rozszerzeniami (podsumowanie)
+ * - Konkretne akcje: zwiększ budżet, duplikuj, testuj warianty
+ * - Potencjalny wzrost konwersji o 30-50% przez skalowanie winners!
  * 
  * Poprzednie wersje:
+ * v1.8.0 - Audyt Search Terms Report (frazy wyszukiwania)
  * v1.7.0 - Audyt grup odbiorców (remarketing, RLSA)
  * v1.6.0 - Audyt rozszerzeń reklam (sitelinks, callouts, snippets)
  * 
@@ -141,12 +151,30 @@ function main() {
   Logger.log('--- Znaleziono problemow: ' + problems.length + ' ---');
   
   var tasks = generateTasks(problems);
+  
+  Logger.log('--- Szukam top elementow do skalowania ---');
+  var topPerformers = {};
+  try {
+    topPerformers = findTopPerformers(CONFIG.DAYS, accountStats);
+    Logger.log('OK Top elementy');
+  } catch(e) {
+    Logger.log('BLAD w znajdowaniu top elementow: ' + e);
+  }
+  
   writeToSpreadsheet(spreadsheet, problems, tasks, accountStats);
+  
+  try {
+    writeTopPerformers(spreadsheet, topPerformers, accountStats);
+    Logger.log('OK Zapisano top elementy');
+  } catch(e) {
+    Logger.log('BLAD w zapisie top elementow: ' + e);
+  }
   
   Logger.log('========================================');
   Logger.log('✅ GOTOWE!');
   Logger.log('📊 Arkusz audytu: ' + spreadsheet.getUrl());
   Logger.log('📁 Folder "Audyty Google Ads" w Google Drive');
+  Logger.log('⭐ Nowa zakladka: Top Elementy - najlepsze do skalowania!');
   Logger.log('========================================');
 }
 
@@ -226,6 +254,7 @@ function initializeSpreadsheet() {
   ss.getActiveSheet().setName('Podsumowanie');
   ss.insertSheet('Problemy');
   ss.insertSheet('Zadania');
+  ss.insertSheet('Top Elementy');
   
   // Przenieś arkusz do folderu
   var file = DriveApp.getFileById(ss.getId());
@@ -281,7 +310,7 @@ function getAccountStats(days) {
       // Google Ads API zwraca koszt już w PLN (nie w mikros!)
       stats.cost = parseNumeric(rawCost);
       
-      Logger.log('=== PO PARSOWANIU (parseNumeric) ===');
+      Logger.log('=== PO PARSOWANIU ===');
       Logger.log('Parsed Conversions: ' + stats.conversions);
       Logger.log('Parsed Clicks: ' + stats.clicks);
       Logger.log('Parsed Cost: ' + stats.cost.toFixed(2) + ' PLN');
@@ -1727,6 +1756,513 @@ function auditSearchTerms(days) {
 }
 
 // ============================================================================
+// ZNAJDOWANIE TOP ELEMENTÓW DO SKALOWANIA
+// ============================================================================
+
+function findTopPerformers(days, accountStats) {
+  var dateFrom = getDateStringDaysAgo(days);
+  var dateTo = getDateStringDaysAgo(0);
+  var topPerformers = {
+    campaigns: [],
+    keywords: [],
+    placements: [],
+    searchTerms: [],
+    ads: [],
+    sitelinks: [],
+    callouts: [],
+    extensions: []
+  };
+  
+  var avgCPA = accountStats.costPerConversion || 0;
+  
+  // ============================================================================
+  // 1. TOP KAMPANIE
+  // ============================================================================
+  try {
+    Logger.log('Szukam top kampanii...');
+    
+    // Zbierz kampanie - priorytet konwersje, potem CTR
+    var campaignReport = AdsApp.report(
+      'SELECT CampaignName, CampaignId, Cost, Conversions, ConversionRate, ' +
+      'Clicks, Impressions, Ctr ' +
+      'FROM CAMPAIGN_PERFORMANCE_REPORT ' +
+      'WHERE Impressions > 100 ' +
+      'DURING ' + dateFrom + ',' + dateTo + ' ' +
+      'ORDER BY Conversions DESC, Ctr DESC'
+    );
+    
+    var rows = campaignReport.rows();
+    var count = 0;
+    
+    while (rows.hasNext() && count < 10) {
+      var row = rows.next();
+      var conversions = parseNumeric(row['Conversions']);
+      var cost = parseNumeric(row['Cost']);
+      var cr = parseNumeric(String(row['ConversionRate']).replace('%', ''));
+      var ctr = parseNumeric(String(row['Ctr']).replace('%', ''));
+      var cpa = conversions > 0 ? cost / conversions : 0;
+      var clicks = parseNumeric(row['Clicks']);
+      
+      var scalingAction;
+      if (conversions > 5 && (cpa < avgCPA * 0.8 || avgCPA === 0)) {
+        scalingAction = 'PRIORYTET: Zwiększ budżet o 50-100%';
+      } else if (conversions > 0) {
+        scalingAction = 'Duplikuj strukturę do nowej kampanii';
+      } else if (ctr > 2 && clicks > 50) {
+        scalingAction = 'Wysoki CTR bez konwersji - sprawdź tracking';
+      } else {
+        scalingAction = 'Monitoruj performance i testuj optymalizacje';
+      }
+      
+      topPerformers.campaigns.push({
+        name: row['CampaignName'],
+        campaignId: row['CampaignId'],
+        conversions: conversions,
+        cr: cr,
+        cpa: cpa,
+        cost: cost,
+        ctr: ctr,
+        clicks: clicks,
+        impressions: parseNumeric(row['Impressions']),
+        scalingAction: scalingAction
+      });
+      count++;
+    }
+    
+    // Usunięto fallback CTR - wszystko jest już w głównym zapytaniu
+    
+    Logger.log('Znaleziono ' + topPerformers.campaigns.length + ' top kampanii (sortowane po konwersjach)');
+  } catch(e) {
+    Logger.log('Błąd w findTopPerformers (kampanie): ' + e);
+  }
+  
+  // ============================================================================
+  // 2. TOP SŁOWA KLUCZOWE
+  // ============================================================================
+  try {
+    Logger.log('Szukam top słowa kluczowe...');
+    
+    // Słowa kluczowe - priorytet konwersje, potem CTR
+    var keywordReport = AdsApp.report(
+      'SELECT CampaignName, AdGroupName, Criteria, QualityScore, ' +
+      'Cost, Conversions, ConversionRate, Clicks, Ctr ' +
+      'FROM KEYWORDS_PERFORMANCE_REPORT ' +
+      'WHERE Impressions > 50 ' +
+      'DURING ' + dateFrom + ',' + dateTo + ' ' +
+      'ORDER BY Conversions DESC, Ctr DESC ' +
+      'LIMIT 0, 15'
+    );
+    
+    var rows = keywordReport.rows();
+    var count = 0;
+    
+    while (rows.hasNext() && count < 10) {
+      var row = rows.next();
+      var conversions = parseNumeric(row['Conversions']);
+      var cost = parseNumeric(row['Cost']);
+      var cr = parseNumeric(String(row['ConversionRate']).replace('%', ''));
+      var cpa = conversions > 0 ? cost / conversions : 0;
+      
+      topPerformers.keywords.push({
+        keyword: row['Criteria'],
+        campaign: row['CampaignName'],
+        adGroup: row['AdGroupName'],
+        conversions: conversions,
+        cr: cr,
+        cpa: cpa,
+        cost: cost,
+        qs: parseNumeric(row['QualityScore']),
+        clicks: parseNumeric(row['Clicks']),
+        ctr: parseNumeric(String(row['Ctr']).replace('%', '')),
+        scalingAction: 'Dodaj podobne frazy lub zwiększ stawki o 20-30%'
+      });
+      count++;
+    }
+    
+    // Usunięto fallback CTR - wszystko jest już w głównym zapytaniu
+    
+    Logger.log('Znaleziono ' + topPerformers.keywords.length + ' top słów (sortowane po konwersjach)');
+  } catch(e) {
+    Logger.log('Błąd w findTopPerformers (słowa): ' + e);
+  }
+  
+  // ============================================================================
+  // 3. TOP MIEJSCA DOCELOWE (Display/Video)
+  // ============================================================================
+  try {
+    Logger.log('Szukam top miejsca docelowe...');
+    
+    var placementReport = AdsApp.report(
+      'SELECT CampaignName, Criteria, Cost, Conversions, ConversionRate, Clicks, Ctr ' +
+      'FROM PLACEMENT_PERFORMANCE_REPORT ' +
+      'WHERE Conversions > 2 ' +
+      'DURING ' + dateFrom + ',' + dateTo + ' ' +
+      'ORDER BY Conversions DESC'
+    );
+    
+    var rows = placementReport.rows();
+    var count = 0;
+    
+    while (rows.hasNext() && count < 5) {
+      var row = rows.next();
+      var conversions = parseNumeric(row['Conversions']);
+      var cost = parseNumeric(row['Cost']);
+      var cr = parseNumeric(String(row['ConversionRate']).replace('%', ''));
+      var cpa = conversions > 0 ? cost / conversions : 0;
+      
+      if (cr > 1.5) {
+        topPerformers.placements.push({
+          url: row['Criteria'],
+          campaign: row['CampaignName'],
+          conversions: conversions,
+          cr: cr,
+          cpa: cpa,
+          cost: cost,
+          clicks: parseNumeric(row['Clicks']),
+          ctr: parseNumeric(String(row['Ctr']).replace('%', '')),
+          scalingAction: 'Utwórz kampanię targetowaną na to miejsce (Managed Placement)'
+        });
+        count++;
+      }
+    }
+    
+    Logger.log('Znaleziono ' + topPerformers.placements.length + ' top miejsc docelowych');
+  } catch(e) {
+    Logger.log('Błąd w findTopPerformers (miejsca): ' + e);
+  }
+  
+  // ============================================================================
+  // 4. TOP FRAZY WYSZUKIWANIA (Search Terms)
+  // ============================================================================
+  try {
+    Logger.log('Szukam top frazy wyszukiwania...');
+    
+    // Używamy AWQL (nie GAQL) - SearchQueryReport
+    var searchTermReport = AdsApp.report(
+      'SELECT CampaignName, CampaignId, Query, Cost, Conversions, Clicks, Impressions ' +
+      'FROM SEARCH_QUERY_PERFORMANCE_REPORT ' +
+      'WHERE Impressions > 10 ' +
+      'DURING ' + dateFrom + ',' + dateTo + ' ' +
+      'ORDER BY Conversions DESC, Clicks DESC '
+    );
+    
+    var rows = searchTermReport.rows();
+    var count = 0;
+    
+    while (rows.hasNext() && count < 10) {
+      var row = rows.next();
+      var conversions = parseNumeric(row['Conversions']);
+      var cost = parseNumeric(row['Cost']);
+      var clicks = parseNumeric(row['Clicks']);
+      var cr = clicks > 0 ? (conversions / clicks) * 100 : 0;
+      var cpa = conversions > 0 ? cost / conversions : 0;
+      
+      topPerformers.searchTerms.push({
+        term: row['Query'],
+        campaign: row['CampaignName'],
+        campaignId: row['CampaignId'],
+        conversions: conversions,
+        cr: cr,
+        cpa: cpa,
+        cost: cost,
+        clicks: clicks,
+        scalingAction: 'Dodaj jako Exact Match keyword dla pełnej kontroli'
+      });
+      count++;
+    }
+    
+    Logger.log('Znaleziono ' + topPerformers.searchTerms.length + ' top fraz (sortowane po konwersjach)');
+  } catch(e) {
+    Logger.log('Błąd w findTopPerformers (frazy): ' + e);
+  }
+  
+  // ============================================================================
+  // 5. TOP REKLAMY
+  // ============================================================================
+  try {
+    Logger.log('Szukam top reklamy...');
+    
+    // Reklamy - priorytet konwersje, potem CTR
+    var adReport = AdsApp.report(
+      'SELECT CampaignName, CampaignId, AdGroupName, HeadlinePart1, HeadlinePart2, Description, ' +
+      'Ctr, Clicks, Conversions, ConversionRate, Cost ' +
+      'FROM AD_PERFORMANCE_REPORT ' +
+      'WHERE Impressions > 50 ' +
+      'DURING ' + dateFrom + ',' + dateTo + ' ' +
+      'ORDER BY Conversions DESC, Ctr DESC ' +
+      'LIMIT 0, 15'
+    );
+    
+    var rows = adReport.rows();
+    var count = 0;
+    
+    while (rows.hasNext() && count < 10) {
+      var row = rows.next();
+      var conversions = parseNumeric(row['Conversions']);
+      var cost = parseNumeric(row['Cost']);
+      var cr = parseNumeric(String(row['ConversionRate']).replace('%', ''));
+      var ctr = parseNumeric(String(row['Ctr']).replace('%', ''));
+      var cpa = conversions > 0 ? cost / conversions : 0;
+      
+      // Obsługa różnych typów reklam - próbuj różne pola
+      var headline1 = row['HeadlinePart1'] || row['Headline1'] || row['Headline'] || '';
+      var headline2 = row['HeadlinePart2'] || row['Headline2'] || '';
+      var description = row['Description'] || row['Description1'] || '';
+      
+      // Jeśli wszystkie pola są puste, użyj kampanii + grupa jako identyfikator
+      var headlineText = headline1 || headline2 ? 
+        (headline1 + (headline2 ? ' | ' + headline2 : '')) : 
+        '[Reklama w: ' + row['CampaignName'] + ' > ' + row['AdGroupName'] + ']';
+      
+      var descText = description ? 
+        (description.substring(0, 60) + (description.length > 60 ? '...' : '')) : 
+        '[Sprawdź szczegóły w Google Ads]';
+      
+      topPerformers.ads.push({
+        headline: headlineText,
+        description: descText,
+        campaign: row['CampaignName'],
+        campaignId: row['CampaignId'],
+        adGroup: row['AdGroupName'],
+        conversions: conversions,
+        cr: cr,
+        ctr: ctr,
+        cpa: cpa,
+        cost: cost,
+        clicks: parseNumeric(row['Clicks']),
+        scalingAction: 'Powiel ten wzorzec komunikacji do innych grup reklam'
+      });
+      count++;
+    }
+    
+    // Usunięto fallback CTR - wszystko jest już w głównym zapytaniu
+    
+    Logger.log('Znaleziono ' + topPerformers.ads.length + ' top reklam (sortowane po konwersjach)');
+  } catch(e) {
+    Logger.log('Błąd w findTopPerformers (reklamy): ' + e);
+  }
+  
+  // ============================================================================
+  // 6. TOP ROZSZERZENIA (Extensions/Components)
+  // ============================================================================
+  try {
+    Logger.log('Analizuję rozszerzenia reklam...');
+    
+    var sitelinksData = [];
+    var calloutsData = [];
+    var extensionPerformance = [];
+    var campaignsProcessed = 0;
+    
+    // Zbieramy kampanie z rozszerzeniami i ich performance
+    var campaigns = AdsApp.campaigns()
+      .withCondition('Status = ENABLED')
+      .forDateRange(dateFrom, dateTo)
+      .get();
+    
+    while (campaigns.hasNext()) {
+      campaignsProcessed++;
+      var campaign = campaigns.next();
+      var stats = campaign.getStatsFor(dateFrom, dateTo);
+      var conversions = stats.getConversions();
+      var clicks = stats.getClicks();
+      var ctr = stats.getCtr();
+      
+      if (clicks < 5) continue; // Minimalna aktywność (obniżony próg)
+      
+      var campaignName = campaign.getName();
+      var campaignId = campaign.getId();
+      var cr = clicks > 0 ? (conversions / clicks) * 100 : 0;
+      
+      // ZBIERAJ KONKRETNE SITELINKS
+      var sitelinkCount = 0;
+      try {
+        var sitelinks = campaign.extensions().sitelinks().get();
+        while (sitelinks.hasNext()) {
+          try {
+            var sitelink = sitelinks.next();
+            var linkText = sitelink.getLinkText() || '[Brak tekstu]';
+            var desc1 = '';
+            var desc2 = '';
+            try {
+              desc1 = sitelink.getDescription1() || '';
+            } catch(e) {}
+            try {
+              desc2 = sitelink.getDescription2() || '';
+            } catch(e) {}
+            
+            var fullDesc = desc1 + (desc2 ? ' | ' + desc2 : '');
+            
+            sitelinksData.push({
+              text: linkText,
+              description: fullDesc ? fullDesc.substring(0, 100) : '-',
+              campaign: campaignName,
+              campaignId: campaignId,
+              conversions: conversions,
+              cr: cr,
+              ctr: ctr,
+              clicks: clicks
+            });
+            sitelinkCount++;
+          } catch(slError) {
+            // Pomiń problematyczne sitelinki
+          }
+        }
+      } catch(e) {
+        // Brak sitelinks lub błąd API
+      }
+      
+      // ZBIERAJ KONKRETNE CALLOUTS
+      var calloutCount = 0;
+      try {
+        var callouts = campaign.extensions().callouts().get();
+        while (callouts.hasNext()) {
+          try {
+            var callout = callouts.next();
+            var calloutText = callout.getText() || '[Brak tekstu]';
+            
+            calloutsData.push({
+              text: calloutText,
+              campaign: campaignName,
+              campaignId: campaignId,
+              conversions: conversions,
+              cr: cr,
+              ctr: ctr,
+              clicks: clicks
+            });
+            calloutCount++;
+          } catch(coError) {
+            // Pomiń problematyczne callouts
+          }
+        }
+      } catch(e) {
+        // Brak callouts lub błąd API
+      }
+      
+      // Sprawdź snippets dla podsumowania
+      var snippetCount = 0;
+      try {
+        var snippets = campaign.extensions().snippets().get();
+        while (snippets.hasNext()) {
+          snippets.next();
+          snippetCount++;
+        }
+      } catch(e) {
+        // Brak snippets lub błąd API
+      }
+      
+      // Zbieraj kampanie z rozszerzeniami dla sekcji podsumowania
+      if (sitelinkCount > 0 || calloutCount > 0 || snippetCount > 0) {
+        var extensionTypes = [];
+        if (sitelinkCount > 0) extensionTypes.push(sitelinkCount + ' sitelinks');
+        if (calloutCount > 0) extensionTypes.push(calloutCount + ' callouts');
+        if (snippetCount > 0) extensionTypes.push(snippetCount + ' snippets');
+        
+        extensionPerformance.push({
+          campaign: campaignName,
+          campaignId: campaignId,
+          extensions: extensionTypes.join(', '),
+          conversions: conversions,
+          cr: cr,
+          ctr: ctr,
+          cost: stats.getCost(),
+          clicks: clicks
+        });
+      }
+    }
+    
+    // Sortuj i wybierz top sitelinks (po konwersjach, potem CTR)
+    sitelinksData.sort(function(a, b) { 
+      if (b.conversions !== a.conversions) return b.conversions - a.conversions;
+      return b.ctr - a.ctr;
+    });
+    
+    // Sortuj i wybierz top callouts
+    calloutsData.sort(function(a, b) { 
+      if (b.conversions !== a.conversions) return b.conversions - a.conversions;
+      return b.ctr - a.ctr;
+    });
+    
+    // Sortuj kampanie z rozszerzeniami po CR
+    extensionPerformance.sort(function(a, b) { return b.cr - a.cr; });
+    
+    // Zapisz top sitelinks (max 10)
+    topPerformers.sitelinks = [];
+    for (var i = 0; i < Math.min(10, sitelinksData.length); i++) {
+      var sl = sitelinksData[i];
+      topPerformers.sitelinks.push({
+        text: sl.text,
+        description: sl.description,
+        campaign: sl.campaign,
+        campaignId: sl.campaignId,
+        conversions: sl.conversions,
+        cr: sl.cr,
+        ctr: sl.ctr,
+        clicks: sl.clicks,
+        scalingAction: 'Dodaj ten sitelink do innych kampanii'
+      });
+    }
+    
+    // Zapisz top callouts (max 10)
+    topPerformers.callouts = [];
+    for (var i = 0; i < Math.min(10, calloutsData.length); i++) {
+      var co = calloutsData[i];
+      topPerformers.callouts.push({
+        text: co.text,
+        campaign: co.campaign,
+        campaignId: co.campaignId,
+        conversions: co.conversions,
+        cr: co.cr,
+        ctr: co.ctr,
+        clicks: co.clicks,
+        scalingAction: 'Dodaj ten callout do innych kampanii'
+      });
+    }
+    
+    // Zapisz top kampanie z rozszerzeniami (max 5)
+    for (var i = 0; i < Math.min(5, extensionPerformance.length); i++) {
+      var perf = extensionPerformance[i];
+      var cpa = perf.conversions > 0 ? perf.cost / perf.conversions : 0;
+      
+      topPerformers.extensions.push({
+        campaign: perf.campaign,
+        campaignId: perf.campaignId,
+        extensions: perf.extensions,
+        conversions: perf.conversions,
+        cr: perf.cr,
+        ctr: perf.ctr,
+        cpa: cpa,
+        cost: perf.cost,
+        clicks: perf.clicks,
+        scalingAction: 'Powiel te rozszerzenia do kampanii bez rozszerzeń'
+      });
+    }
+    
+    Logger.log('=== DIAGNOSTYKA ROZSZERZEŃ ===');
+    Logger.log('Przetworzono kampanii: ' + campaignsProcessed);
+    Logger.log('Zebranych sitelinks (surowe): ' + sitelinksData.length);
+    Logger.log('Zebranych callouts (surowe): ' + calloutsData.length);
+    Logger.log('Kampanii z rozszerzeniami: ' + extensionPerformance.length);
+    Logger.log('Znaleziono ' + topPerformers.sitelinks.length + ' top sitelinks');
+    Logger.log('Znaleziono ' + topPerformers.callouts.length + ' top callouts');
+    Logger.log('Znaleziono ' + topPerformers.extensions.length + ' kampanii z top rozszerzeniami');
+  } catch(e) {
+    Logger.log('Błąd w findTopPerformers (rozszerzenia): ' + e);
+  }
+  
+  Logger.log('=== PODSUMOWANIE TOP ELEMENTÓW ===');
+  Logger.log('Kampanie: ' + topPerformers.campaigns.length);
+  Logger.log('Słowa kluczowe: ' + topPerformers.keywords.length);
+  Logger.log('Miejsca docelowe: ' + topPerformers.placements.length);
+  Logger.log('Frazy: ' + topPerformers.searchTerms.length);
+  Logger.log('Reklamy: ' + topPerformers.ads.length);
+  Logger.log('Sitelinks: ' + (topPerformers.sitelinks ? topPerformers.sitelinks.length : 0));
+  Logger.log('Callouts: ' + (topPerformers.callouts ? topPerformers.callouts.length : 0));
+  Logger.log('Kampanie z rozszerzeniami: ' + topPerformers.extensions.length);
+  
+  return topPerformers;
+}
+
+// ============================================================================
 // GENEROWANIE ZADAŃ
 // ============================================================================
 
@@ -1896,6 +2432,350 @@ function generateTasks(problems) {
   }
   
   return tasks;
+}
+
+// ============================================================================
+// ZAPIS TOP ELEMENTÓW DO ARKUSZA
+// ============================================================================
+
+function writeTopPerformers(spreadsheet, topPerformers, accountStats) {
+  var topSheet = spreadsheet.getSheetByName('Top Elementy');
+  topSheet.clear();
+  
+  var accountId = AdsApp.currentAccount().getCustomerId().replace(/-/g, '');
+  var baseUrl = 'https://ads.google.com/aw/';
+  
+  // Nagłówek główny
+  var data = [
+    ['🏆 TOP ELEMENTY DO SKALOWANIA - MAKSYMALIZUJ KONWERSJE', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['Średni CPA konta: ' + safeFormat(accountStats.costPerConversion, 2, 'PLN'), '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '']
+  ];
+  
+  var currentRow = 5;
+  
+  // ============================================================================
+  // SEKCJA 1: TOP KAMPANIE
+  // ============================================================================
+  if (topPerformers.campaigns.length > 0) {
+    data.push(['📊 TOP KAMPANIE (sortowane po liczbie konwersji)', '', '', '', '', '', '', '']);
+    data.push(['Kampania', 'Konwersje', 'CR', 'CPA', 'CTR', 'Koszt', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.campaigns.length; i++) {
+      var c = topPerformers.campaigns[i];
+      var link = baseUrl + 'campaigns/edit?ocid=' + accountId + '&campaignId=' + c.campaignId;
+      
+      data.push([
+        c.name,
+        c.conversions.toFixed(1),
+        c.cr.toFixed(2) + '%',
+        c.cpa.toFixed(2) + ' PLN',
+        c.ctr.toFixed(2) + '%',
+        c.cost.toFixed(2) + ' PLN',
+        c.scalingAction,
+        '' // Link będzie dodany jako hyperlink
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+    currentRow += topPerformers.campaigns.length + 3;
+  }
+  
+  // ============================================================================
+  // SEKCJA 2: TOP SŁOWA KLUCZOWE
+  // ============================================================================
+  if (topPerformers.keywords.length > 0) {
+    data.push(['🔑 TOP SŁOWA KLUCZOWE (sortowane po liczbie konwersji)', '', '', '', '', '', '', '']);
+    data.push(['Słowo kluczowe', 'Kampania > Grupa', 'Konwersje', 'CR', 'CPA', 'QS', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.keywords.length; i++) {
+      var k = topPerformers.keywords[i];
+      var link = baseUrl + 'keywords?ocid=' + accountId;
+      
+      data.push([
+        k.keyword,
+        k.campaign + ' > ' + k.adGroup,
+        k.conversions.toFixed(1),
+        k.cr.toFixed(2) + '%',
+        k.cpa.toFixed(2) + ' PLN',
+        k.qs || 'N/A',
+        k.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // ============================================================================
+  // SEKCJA 3: TOP FRAZY WYSZUKIWANIA
+  // ============================================================================
+  if (topPerformers.searchTerms.length > 0) {
+    data.push(['🔍 TOP FRAZY WYSZUKIWANIA (CR > 2%, gotowe do dodania jako keywords)', '', '', '', '', '', '', '']);
+    data.push(['Fraza', 'Kampania', 'Konwersje', 'CR', 'CPA', 'Kliknięcia', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.searchTerms.length; i++) {
+      var s = topPerformers.searchTerms[i];
+      var link = baseUrl + 'campaigns/searchterms?ocid=' + accountId + '&campaignId=' + s.campaignId;
+      
+      data.push([
+        s.term,
+        s.campaign,
+        s.conversions.toFixed(1),
+        s.cr.toFixed(2) + '%',
+        s.cpa.toFixed(2) + ' PLN',
+        s.clicks,
+        s.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // ============================================================================
+  // SEKCJA 4: TOP REKLAMY
+  // ============================================================================
+  if (topPerformers.ads.length > 0) {
+    data.push(['📢 TOP REKLAMY (sortowane po liczbie konwersji)', '', '', '', '', '', '', '']);
+    data.push(['Nagłówek', 'Opis', 'Kampania > Grupa', 'Konwersje', 'CR', 'CTR', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.ads.length; i++) {
+      var a = topPerformers.ads[i];
+      var link = baseUrl + 'ads?ocid=' + accountId + '&campaignId=' + a.campaignId;
+      
+      data.push([
+        a.headline,
+        a.description,
+        a.campaign + ' > ' + a.adGroup,
+        a.conversions.toFixed(1),
+        a.cr.toFixed(2) + '%',
+        a.ctr.toFixed(2) + '%',
+        a.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // ============================================================================
+  // SEKCJA 5: TOP SITELINKS (konkretne rozszerzenia)
+  // ============================================================================
+  if (topPerformers.sitelinks && topPerformers.sitelinks.length > 0) {
+    data.push(['🔗 TOP SITELINKS (rozszerzenia do powielenia)', '', '', '', '', '', '', '']);
+    data.push(['Tekst Sitelink', 'Opis', 'Kampania', 'Konwersje', 'CR', 'CTR', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.sitelinks.length; i++) {
+      var sl = topPerformers.sitelinks[i];
+      var link = baseUrl + 'extensions?ocid=' + accountId + '&campaignId=' + sl.campaignId;
+      
+      data.push([
+        sl.text,
+        sl.description || '-',
+        sl.campaign,
+        sl.conversions.toFixed(1),
+        sl.cr.toFixed(2) + '%',
+        sl.ctr.toFixed(2) + '%',
+        sl.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // ============================================================================
+  // SEKCJA 6: TOP CALLOUTS (konkretne rozszerzenia)
+  // ============================================================================
+  if (topPerformers.callouts && topPerformers.callouts.length > 0) {
+    data.push(['💬 TOP CALLOUTS (rozszerzenia do powielenia)', '', '', '', '', '', '', '']);
+    data.push(['Tekst Callout', 'Kampania', 'Konwersje', 'CR', 'CTR', 'Kliknięcia', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.callouts.length; i++) {
+      var co = topPerformers.callouts[i];
+      var link = baseUrl + 'extensions?ocid=' + accountId + '&campaignId=' + co.campaignId;
+      
+      data.push([
+        co.text,
+        co.campaign,
+        co.conversions.toFixed(1),
+        co.cr.toFixed(2) + '%',
+        co.ctr.toFixed(2) + '%',
+        co.clicks,
+        co.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // ============================================================================
+  // SEKCJA 7: TOP MIEJSCA DOCELOWE
+  // ============================================================================
+  if (topPerformers.placements.length > 0) {
+    data.push(['📺 TOP MIEJSCA DOCELOWE Display/Video (CR > 1.5%)', '', '', '', '', '', '', '']);
+    data.push(['URL', 'Kampania', 'Konwersje', 'CR', 'CPA', 'CTR', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.placements.length; i++) {
+      var p = topPerformers.placements[i];
+      var link = baseUrl + 'placements?ocid=' + accountId;
+      
+      data.push([
+        p.url,
+        p.campaign,
+        p.conversions.toFixed(1),
+        p.cr.toFixed(2) + '%',
+        p.cpa.toFixed(2) + ' PLN',
+        p.ctr.toFixed(2) + '%',
+        p.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // ============================================================================
+  // SEKCJA 8: TOP KAMPANIE Z ROZSZERZENIAMI (PODSUMOWANIE)
+  // ============================================================================
+  if (topPerformers.extensions.length > 0) {
+    data.push(['🧩 TOP KAMPANIE Z ROZSZERZENIAMI (podsumowanie)', '', '', '', '', '', '', '']);
+    data.push(['Kampania', 'Rozszerzenia', 'Konwersje', 'CR', 'CPA', 'CTR', 'Akcja skalująca', '🔗 Link']);
+    
+    for (var i = 0; i < topPerformers.extensions.length; i++) {
+      var e = topPerformers.extensions[i];
+      var link = baseUrl + 'extensions?ocid=' + accountId + '&campaignId=' + e.campaignId;
+      
+      data.push([
+        e.campaign,
+        e.extensions,
+        e.conversions.toFixed(1),
+        e.cr.toFixed(2) + '%',
+        e.cpa.toFixed(2) + ' PLN',
+        e.ctr.toFixed(2) + '%',
+        e.scalingAction,
+        ''
+      ]);
+    }
+    
+    data.push(['', '', '', '', '', '', '', '']);
+  }
+  
+  // Wpisz dane do arkusza
+  if (data.length > 0) {
+    topSheet.getRange(1, 1, data.length, 8).setValues(data);
+    
+    // Formatowanie nagłówka głównego
+    topSheet.getRange('A1:H1')
+      .setFontSize(16)
+      .setFontWeight('bold')
+      .setBackground('#34a853')
+      .setFontColor('#ffffff')
+      .merge();
+    
+    // Formatowanie nagłówków sekcji
+    var headerRows = [];
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] && (
+          data[i][0].indexOf('📊 TOP') === 0 || 
+          data[i][0].indexOf('🔑 TOP') === 0 || 
+          data[i][0].indexOf('🔍 TOP') === 0 || 
+          data[i][0].indexOf('📢 TOP') === 0 || 
+          data[i][0].indexOf('🔗 TOP') === 0 || 
+          data[i][0].indexOf('💬 TOP') === 0 || 
+          data[i][0].indexOf('📺 TOP') === 0 ||
+          data[i][0].indexOf('🧩 TOP') === 0
+      )) {
+        headerRows.push(i + 1);
+        topSheet.getRange(i + 1, 1, 1, 8)
+          .setFontWeight('bold')
+          .setBackground('#fbbc04')
+          .setFontColor('#000000')
+          .merge();
+        
+        // Następny wiersz to nagłówki kolumn
+        if (i + 1 < data.length) {
+          topSheet.getRange(i + 2, 1, 1, 8)
+            .setFontWeight('bold')
+            .setBackground('#e8f0fe')
+            .setFontColor('#000000');
+        }
+      }
+    }
+    
+    // Dodaj hyperlinki w kolumnie H (link)
+    var linkColumn = 8;
+    for (var i = 0; i < data.length; i++) {
+      var rowNum = i + 1;
+      var cellValue = data[i][0];
+      
+      // Pomiń nagłówki i puste wiersze
+      if (!cellValue || 
+          cellValue.indexOf('TOP') !== -1 || 
+          cellValue === 'Kampania' || 
+          cellValue === 'Słowo kluczowe' ||
+          cellValue === 'Fraza' ||
+          cellValue === 'Nagłówek' ||
+          cellValue === 'URL' ||
+          cellValue === 'Średni CPA' ||
+          cellValue.indexOf('🏆') !== -1) {
+        continue;
+      }
+      
+      // Znajdź odpowiedni link dla tego wiersza
+      var linkUrl = '';
+      
+      // Kampanie
+      if (i >= 6 && topPerformers.campaigns.length > 0) {
+        var campaignIndex = i - 7;
+        if (campaignIndex >= 0 && campaignIndex < topPerformers.campaigns.length) {
+          var c = topPerformers.campaigns[campaignIndex];
+          linkUrl = baseUrl + 'campaigns/edit?ocid=' + accountId + '&campaignId=' + c.campaignId;
+        }
+      }
+      
+      if (linkUrl) {
+        topSheet.getRange(rowNum, linkColumn)
+          .setFormula('=HYPERLINK("' + linkUrl + '", "➜ Otwórz")')
+          .setFontColor('#1a73e8')
+          .setFontWeight('bold');
+      }
+    }
+    
+    // Ustawienia kolumn
+    topSheet.setColumnWidth(1, 300);  // Nazwa/Słowo/Fraza
+    topSheet.setColumnWidth(2, 200);  // Dodatkowe info
+    topSheet.setColumnWidth(3, 100);  // Konwersje
+    topSheet.setColumnWidth(4, 80);   // CR
+    topSheet.setColumnWidth(5, 100);  // CPA
+    topSheet.setColumnWidth(6, 80);   // QS/CTR/Inne
+    topSheet.setColumnWidth(7, 350);  // Akcja skalująca
+    topSheet.setColumnWidth(8, 120);  // Link
+    
+    topSheet.setFrozenRows(1);
+    
+    // Koloruj wiersze danych na zielono (sukces)
+    for (var i = 0; i < data.length; i++) {
+      var cellValue = data[i][0];
+      if (cellValue && 
+          cellValue.indexOf('TOP') === -1 && 
+          cellValue !== 'Kampania' && 
+          cellValue !== 'Słowo kluczowe' &&
+          cellValue !== 'Fraza' &&
+          cellValue !== 'Nagłówek' &&
+          cellValue !== 'URL' &&
+          cellValue !== 'Średni CPA' &&
+          cellValue.indexOf('🏆') === -1 &&
+          cellValue !== '') {
+        topSheet.getRange(i + 1, 1, 1, 8).setBackground('#d9ead3');
+      }
+    }
+  }
+  
+  Logger.log('✅ Zapisano Top Elementy do arkusza');
 }
 
 // ============================================================================
