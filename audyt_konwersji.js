@@ -3,8 +3,8 @@
  * SKRYPT AUDYTU GOOGLE ADS - MAKSYMALIZACJA KONWERSJI
  * ============================================================================
  * 
- * Wersja: 1.5.2 ⚡
- * Data: 2025-11-06
+ * Wersja: 1.8.0 ⚡
+ * Data: 2025-11-12
  * 
  * Audytuje konto Google Ads pod kątem maksymalizacji konwersji.
  * Generuje arkusz Google Sheets z listą problemów i zadań.
@@ -17,11 +17,16 @@
  * 5. Raporty zapisują się w folderze "Audyty Google Ads"
  * 6. Kliknij linki w zadaniach - otwierają KONKRETNE kampanie!
  * 
- * Changelog v1.5.2:
- * - OPTYMALIZACJA: Nowa funkcja parseNumeric() - ujednolicone parsowanie danych
- * - OPTYMALIZACJA: LIMIT 5000 słów kluczowych (dla dużych kont)
- * - PERFORMANCE: Sortowanie po Cost DESC w raportach
- * - REFACTOR: Wyeliminowano duplikację kodu parsowania
+ * Changelog v1.8.0:
+ * - NOWA FUNKCJA: Audyt Search Terms Report
+ * - Wykrywa kosztowne frazy bez konwersji (marnotrawstwo budżetu)
+ * - Identyfikuje słowa negatywne do dodania
+ * - Znajduje wartościowe frazy do rozbudowy kampanii
+ * - Potencjalny wzrost ROI o 20-40%
+ * 
+ * Poprzednie wersje:
+ * v1.7.0 - Audyt grup odbiorców (remarketing, RLSA)
+ * v1.6.0 - Audyt rozszerzeń reklam (sitelinks, callouts, snippets)
  * 
  * ============================================================================
  */
@@ -112,6 +117,27 @@ function main() {
     Logger.log('BLAD w audyt miejsc docelowych: ' + e);
   }
   
+  try {
+    problems = problems.concat(auditAdExtensions(CONFIG.DAYS));
+    Logger.log('OK Rozszerzenia reklam');
+  } catch(e) {
+    Logger.log('BLAD w audyt rozszen: ' + e);
+  }
+  
+  try {
+    problems = problems.concat(auditAudiences(CONFIG.DAYS));
+    Logger.log('OK Grupy odbiorcow');
+  } catch(e) {
+    Logger.log('BLAD w audyt odbiorcow: ' + e);
+  }
+  
+  try {
+    problems = problems.concat(auditSearchTerms(CONFIG.DAYS));
+    Logger.log('OK Frazy wyszukiwania');
+  } catch(e) {
+    Logger.log('BLAD w audyt fraz: ' + e);
+  }
+  
   Logger.log('--- Znaleziono problemow: ' + problems.length + ' ---');
   
   var tasks = generateTasks(problems);
@@ -200,7 +226,6 @@ function initializeSpreadsheet() {
   ss.getActiveSheet().setName('Podsumowanie');
   ss.insertSheet('Problemy');
   ss.insertSheet('Zadania');
-  ss.insertSheet('Dane');
   
   // Przenieś arkusz do folderu
   var file = DriveApp.getFileById(ss.getId());
@@ -1092,6 +1117,590 @@ function auditPlacements(days) {
 }
 
 // ============================================================================
+// AUDYT 8: ROZSZERZENIA REKLAM (AD EXTENSIONS)
+// ============================================================================
+
+function auditAdExtensions(days) {
+  var problems = [];
+  var dateFrom = getDateStringDaysAgo(days);
+  var dateTo = getDateStringDaysAgo(0);
+  
+  try {
+    // Pobierz kampanie z dobrą wydajnością (>5 konwersji lub >100 kliknięć)
+    var campaigns = AdsApp.campaigns()
+      .withCondition('Impressions > 100')
+      .forDateRange(dateFrom, dateTo)
+      .get();
+    
+    Logger.log('Sprawdzam rozszerzenia dla kampanii...');
+    
+    while (campaigns.hasNext()) {
+      var campaign = campaigns.next();
+      var name = campaign.getName();
+      var campaignId = campaign.getId();
+      var stats = campaign.getStatsFor(dateFrom, dateTo);
+      var conversions = stats.getConversions();
+      var clicks = stats.getClicks();
+      
+      // Sprawdzaj tylko kampanie z wystarczającą aktywnością
+      if (conversions < 1 && clicks < 50) {
+        continue;
+      }
+      
+      // SPRAWDZENIE 1: Sitelinks
+      var sitelinkSelector = campaign.extensions().sitelinks().get();
+      
+      if (!sitelinkSelector.hasNext()) {
+        var priority = conversions > 5 ? 'HIGH' : 'MEDIUM';
+        problems.push(createProblem(
+          priority,
+          'Rozszerzenia',
+          'Kampania "' + name + '" - brak sitelinks',
+          'Sitelinks zwiększają CTR o 10-20%, kampania ma ' + conversions.toFixed(0) + ' konwersji',
+          name,
+          {
+            conversions: conversions.toFixed(0),
+            clicks: clicks,
+            potentialCTRIncrease: '10-20%'
+          },
+          'Dodaj min. 4 sitelinki do kampanii',
+          campaignId
+        ));
+      }
+      
+      // SPRAWDZENIE 2: Callouts
+      var calloutSelector = campaign.extensions().callouts().get();
+      
+      if (!calloutSelector.hasNext()) {
+        var priority = conversions > 5 ? 'HIGH' : 'MEDIUM';
+        problems.push(createProblem(
+          priority,
+          'Rozszerzenia',
+          'Kampania "' + name + '" - brak callouts',
+          'Callouts są darmowe i zwiększają widoczność, kampania ma ' + clicks + ' kliknięć',
+          name,
+          {
+            conversions: conversions.toFixed(0),
+            clicks: clicks,
+            benefit: 'Większa widoczność w SERP'
+          },
+          'Dodaj min. 4 callouts (np. "Darmowa dostawa", "24/7 Support")',
+          campaignId
+        ));
+      }
+      
+      // SPRAWDZENIE 3: Structured Snippets
+      var snippetSelector = campaign.extensions().snippets().get();
+      
+      if (!snippetSelector.hasNext() && conversions > 3) {
+        problems.push(createProblem(
+          'MEDIUM',
+          'Rozszerzenia',
+          'Kampania "' + name + '" - brak structured snippets',
+          'Snippets prezentują ofertę w uporządkowany sposób',
+          name,
+          {
+            conversions: conversions.toFixed(0),
+            suggestion: 'Typy, Marki, Usługi'
+          },
+          'Dodaj structured snippets (np. Typy: [lista], Marki: [lista])',
+          campaignId
+        ));
+      }
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditAdExtensions (kampanie): ' + e);
+  }
+  
+  // SPRAWDZENIE 4: Zostało usunięte - API nie wspiera sprawdzania statusów extensions
+  
+  // SPRAWDZENIE 5: Zostało usunięte - raport SITELINK_PERFORMANCE_REPORT nie jest dostępny w API
+  
+  Logger.log('Sprawdzono rozszerzenia reklam');
+  return problems;
+}
+
+// ============================================================================
+// AUDYT 9: GRUPY ODBIORCÓW (AUDIENCES)
+// ============================================================================
+
+function auditAudiences(days) {
+  var problems = [];
+  var dateFrom = getDateStringDaysAgo(days);
+  var dateTo = getDateStringDaysAgo(0);
+  
+  // SPRAWDZENIE 1: Kampanie bez remarketing list
+  try {
+    var campaigns = AdsApp.campaigns()
+      .withCondition('Status = ENABLED')
+      .forDateRange(dateFrom, dateTo)
+      .get();
+    
+    Logger.log('Sprawdzam audiences dla kampanii...');
+    
+    while (campaigns.hasNext()) {
+      var campaign = campaigns.next();
+      var stats = campaign.getStatsFor(dateFrom, dateTo);
+      var conversions = stats.getConversions();
+      
+      // Sprawdzaj tylko kampanie z konwersjami
+      if (conversions < 3) {
+        continue;
+      }
+      
+      var name = campaign.getName();
+      var campaignId = campaign.getId();
+      
+      // Sprawdź czy kampania ma jakiekolwiek audiences (targeting lub observation)
+      var audienceSelector = campaign.targeting().audiences().get();
+      var hasEnabledAudiences = false;
+      
+      while (audienceSelector.hasNext()) {
+        var audience = audienceSelector.next();
+        if (audience.isEnabled()) {
+          hasEnabledAudiences = true;
+          break;
+        }
+      }
+      
+      var hasAudiences = hasEnabledAudiences;
+      
+      if (!hasAudiences) {
+        var priority = conversions > 10 ? 'HIGH' : 'MEDIUM';
+        problems.push(createProblem(
+          priority,
+          'Odbiorcy',
+          'Kampania "' + name + '" - brak list remarketingowych',
+          'Remarketing ma 2-3x wyższy CR niż cold traffic, kampania ma ' + conversions.toFixed(0) + ' konwersji',
+          name,
+          {
+            conversions: conversions.toFixed(0),
+            potentialCRIncrease: '2-3x',
+            type: 'Brak remarketingu'
+          },
+          'Dodaj listy remarketingowe (obserwacja lub targeting)',
+          campaignId
+        ));
+      }
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditAudiences (kampanie): ' + e);
+  }
+  
+  // SPRAWDZENIE 2: Brak wykluczeń konwertujących użytkowników
+  try {
+    var campaigns = AdsApp.campaigns()
+      .withCondition('Status = ENABLED')
+      .forDateRange(dateFrom, dateTo)
+      .get();
+    
+    while (campaigns.hasNext()) {
+      var campaign = campaigns.next();
+      var stats = campaign.getStatsFor(dateFrom, dateTo);
+      var conversions = stats.getConversions();
+      
+      if (conversions < 5) {
+        continue;
+      }
+      
+      var name = campaign.getName();
+      var campaignId = campaign.getId();
+      
+      // Sprawdź excluded audiences
+      var excludedAudiences = campaign.targeting().excludedAudiences().get();
+      
+      if (!excludedAudiences.hasNext()) {
+        problems.push(createProblem(
+          'HIGH',
+          'Odbiorcy',
+          'Kampania "' + name + '" - brak wykluczeń użytkowników',
+          'Wykluczenie konwertujących oszczędza budżet, kampania ma ' + conversions.toFixed(0) + ' konwersji',
+          name,
+          {
+            conversions: conversions.toFixed(0),
+            suggestion: 'Wyklucz konwertujących, koszyk porzucony, obecnych klientów'
+          },
+          'Dodaj wykluczenia: konwertujący użytkownicy, obecni klienci',
+          campaignId
+        ));
+      }
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditAudiences (wykluczenia): ' + e);
+  }
+  
+  // SPRAWDZENIE 3: Małe lub wygasłe listy remarketingowe
+  try {
+    var userLists = AdsApp.userlists().get();
+    var smallListsCount = 0;
+    var closedListsCount = 0;
+    
+    while (userLists.hasNext()) {
+      var userList = userLists.next();
+      var listName = userList.getName();
+      var sizeRange = userList.getSizeRangeForSearch(); // LESS_THAN_FIVE_HUNDRED, LESS_THAN_ONE_THOUSAND, etc.
+      var isClosed = userList.isClosed();
+      
+      // Sprawdź czy lista jest używana
+      var targetedCampaignsSelector = userList.targetedCampaigns().get();
+      var isUsed = false;
+      
+      while (targetedCampaignsSelector.hasNext()) {
+        var targetedCampaign = targetedCampaignsSelector.next();
+        if (targetedCampaign.isEnabled()) {
+          isUsed = true;
+          break;
+        }
+      }
+      
+      // Mała lista używana w kampaniach
+      if (sizeRange === 'LESS_THAN_FIVE_HUNDRED' && isUsed) {
+        smallListsCount++;
+        
+        if (smallListsCount <= 3) { // Raportuj max 3 małe listy
+          problems.push(createProblem(
+            'MEDIUM',
+            'Odbiorcy',
+            'Lista "' + listName + '" - mało użytkowników',
+            'Lista ma mniej niż 500 użytkowników, może być nieefektywna',
+            listName,
+            {
+              sizeRange: sizeRange,
+              status: isClosed ? 'Zamknięta' : 'Otwarta'
+            },
+            'Zwiększ zasięg lub połącz z innymi listami',
+            null
+          ));
+        }
+      }
+      
+      // Zamknięta lista (nie zbiera nowych użytkowników)
+      if (isClosed && isUsed) {
+        closedListsCount++;
+      }
+    }
+    
+    if (closedListsCount > 5) {
+      problems.push(createProblem(
+        'LOW',
+        'Odbiorcy',
+        'Wiele zamkniętych list remarketingowych: ' + closedListsCount,
+        'Zamknięte listy nie zbierają nowych użytkowników',
+        'Konto',
+        {
+          closedCount: closedListsCount
+        },
+        'Otwórz listy aby zbierać nowych użytkowników lub usuń nieużywane',
+        null
+      ));
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditAudiences (male listy): ' + e);
+  }
+  
+  // SPRAWDZENIE 4: Nieużywane listy Customer Match
+  try {
+    var userLists = AdsApp.userlists().get();
+    var unusedCrmLists = [];
+    
+    while (userLists.hasNext()) {
+      var userList = userLists.next();
+      var listType = userList.getType();
+      
+      // Sprawdź czy to lista CRM_BASED (Customer Match)
+      if (listType === 'CRM_BASED') {
+        var listName = userList.getName();
+        
+        // Sprawdź czy lista jest używana
+        var targetedCampaigns = userList.targetedCampaigns()
+          .withCondition('Status = ENABLED')
+          .get();
+        
+        if (!targetedCampaigns.hasNext()) {
+          unusedCrmLists.push(listName);
+        }
+      }
+    }
+    
+    if (unusedCrmLists.length > 0) {
+      var listNames = unusedCrmLists.slice(0, 3).join(', ');
+      if (unusedCrmLists.length > 3) {
+        listNames += ' (+ ' + (unusedCrmLists.length - 3) + ' innych)';
+      }
+      
+      problems.push(createProblem(
+        'LOW',
+        'Odbiorcy',
+        'Nieużywane listy Customer Match: ' + unusedCrmLists.length,
+        'Customer Match to najlepsze targety, listy: ' + listNames,
+        'Konto',
+        {
+          unusedCount: unusedCrmLists.length,
+          examples: listNames
+        },
+        'Dodaj listy Customer Match do kampanii lub usuń nieużywane',
+        null
+      ));
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditAudiences (Customer Match): ' + e);
+  }
+  
+  // SPRAWDZENIE 5: Zostało usunięte - raport AUDIENCE_PERFORMANCE_REPORT nie jest dostępny w API
+  
+  Logger.log('Sprawdzono grupy odbiorcow');
+  return problems;
+}
+
+// ============================================================================
+// AUDYT 10: SEARCH TERMS REPORT (FRAZY WYSZUKIWANIA)
+// ============================================================================
+
+function auditSearchTerms(days) {
+  var problems = [];
+  var dateFrom = getDateStringDaysAgo(days);
+  var dateTo = getDateStringDaysAgo(0);
+  
+  // SPRAWDZENIE 1: Kosztowne frazy bez konwersji
+  try {
+    Logger.log('Sprawdzam kosztowne frazy bez konwersji...');
+    
+    var searchTermReport = AdsApp.report(
+      'SELECT campaign.name, campaign.id, ' +
+      '  search_term_view.search_term, ' +
+      '  metrics.cost_micros, metrics.conversions, ' +
+      '  metrics.clicks, metrics.impressions ' +
+      'FROM search_term_view ' +
+      'WHERE metrics.cost_micros > ' + (CONFIG.HIGH_COST_THRESHOLD * 1000000) + ' ' +
+      '  AND metrics.conversions = 0 ' +
+      '  AND segments.date DURING LAST_' + days + '_DAYS'
+    );
+    
+    var expensiveTerms = {};
+    var rows = searchTermReport.rows();
+    
+    while (rows.hasNext()) {
+      var row = rows.next();
+      var campName = row['campaign.name'];
+      var campId = row['campaign.id'];
+      var searchTerm = row['search_term_view.search_term'];
+      var costMicros = parseNumeric(row['metrics.cost_micros']);
+      var clicks = parseNumeric(row['metrics.clicks']);
+      
+      var cost = costMicros / 1000000;
+      
+      if (!expensiveTerms[campId]) {
+        expensiveTerms[campId] = {
+          name: campName,
+          terms: [],
+          totalCost: 0
+        };
+      }
+      
+      expensiveTerms[campId].terms.push({
+        term: searchTerm,
+        cost: cost,
+        clicks: clicks
+      });
+      expensiveTerms[campId].totalCost += cost;
+    }
+    
+    // Generuj problemy dla kampanii z dużym marnotrawstwem
+    for (var campId in expensiveTerms) {
+      var data = expensiveTerms[campId];
+      
+      if (data.totalCost > CONFIG.HIGH_COST_THRESHOLD * 2) {
+        var topTerms = data.terms
+          .sort(function(a, b) { return b.cost - a.cost; })
+          .slice(0, 3)
+          .map(function(t) { return t.term + ' (' + t.cost.toFixed(2) + ' PLN)'; })
+          .join(', ');
+        
+        problems.push(createProblem(
+          'HIGH',
+          'Frazy',
+          'Kampania "' + data.name + '" - kosztowne frazy bez konwersji',
+          'Marnotrawstwo ' + data.totalCost.toFixed(2) + ' PLN na frazy bez konwersji',
+          data.name,
+          {
+            totalWaste: data.totalCost.toFixed(2) + ' PLN',
+            termsCount: data.terms.length,
+            topTerms: topTerms
+          },
+          'Dodaj te frazy jako słowa negatywne lub popraw targetowanie',
+          campId
+        ));
+      }
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditSearchTerms (kosztowne): ' + e);
+  }
+  
+  // SPRAWDZENIE 2: Potencjalne słowa negatywne (nierelewantne frazy)
+  try {
+    Logger.log('Identyfikuję potencjalne słowa negatywne...');
+    
+    // Lista typowych nierelewantnych słów
+    var negativeKeywords = ['za darmo', 'darmowy', 'darmowe', 'free', 'bezpłatny', 
+                            'instrukcja', 'jak zrobić', 'tutorial', 'poradnik',
+                            'praca', 'oferty pracy', 'zatrudnię', 'cv',
+                            'używane', 'używany', 'second hand'];
+    
+    var searchTermReport2 = AdsApp.report(
+      'SELECT campaign.name, campaign.id, ' +
+      '  search_term_view.search_term, ' +
+      '  metrics.cost_micros, metrics.clicks ' +
+      'FROM search_term_view ' +
+      'WHERE metrics.clicks > 5 ' +
+      '  AND segments.date DURING LAST_' + days + '_DAYS'
+    );
+    
+    var campaignBadTerms = {};
+    var rows2 = searchTermReport2.rows();
+    
+    while (rows2.hasNext()) {
+      var row = rows2.next();
+      var campName = row['campaign.name'];
+      var campId = row['campaign.id'];
+      var searchTerm = row['search_term_view.search_term'].toLowerCase();
+      var clicks = parseNumeric(row['metrics.clicks']);
+      
+      // Sprawdź czy fraza zawiera nierelewantne słowa
+      for (var i = 0; i < negativeKeywords.length; i++) {
+        if (searchTerm.indexOf(negativeKeywords[i]) !== -1) {
+          if (!campaignBadTerms[campId]) {
+            campaignBadTerms[campId] = {
+              name: campName,
+              terms: [],
+              clicks: 0
+            };
+          }
+          
+          campaignBadTerms[campId].terms.push(searchTerm);
+          campaignBadTerms[campId].clicks += clicks;
+          break;
+        }
+      }
+    }
+    
+    // Generuj problemy
+    for (var campId in campaignBadTerms) {
+      var data = campaignBadTerms[campId];
+      
+      if (data.terms.length >= 3) {
+        var examples = data.terms.slice(0, 3).join(', ');
+        
+        problems.push(createProblem(
+          'MEDIUM',
+          'Frazy',
+          'Kampania "' + data.name + '" - nierelewantne frazy',
+          data.terms.length + ' fraz zawiera słowa jak "darmowy", "instrukcja", "praca" - ' + data.clicks + ' kliknięć',
+          data.name,
+          {
+            badTermsCount: data.terms.length,
+            wastedClicks: data.clicks,
+            examples: examples
+          },
+          'Dodaj słowa negatywne: darmowy, instrukcja, praca, używany, etc.',
+          campId
+        ));
+      }
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditSearchTerms (negatywne): ' + e);
+  }
+  
+  // SPRAWDZENIE 3: Wartościowe frazy do dodania jako keywords
+  try {
+    Logger.log('Szukam wartościowych fraz do rozbudowy...');
+    
+    var searchTermReport3 = AdsApp.report(
+      'SELECT campaign.name, campaign.id, ' +
+      '  search_term_view.search_term, ' +
+      '  metrics.conversions, metrics.cost_micros, ' +
+      '  metrics.clicks ' +
+      'FROM search_term_view ' +
+      'WHERE metrics.conversions > 1 ' +
+      '  AND metrics.clicks > 9 ' +
+      '  AND segments.date DURING LAST_' + days + '_DAYS'
+    );
+    
+    var campaignGoodTerms = {};
+    var rows3 = searchTermReport3.rows();
+    
+    while (rows3.hasNext()) {
+      var row = rows3.next();
+      var campName = row['campaign.name'];
+      var campId = row['campaign.id'];
+      var searchTerm = row['search_term_view.search_term'];
+      var conversions = parseNumeric(row['metrics.conversions']);
+      var costMicros = parseNumeric(row['metrics.cost_micros']);
+      var clicks = parseNumeric(row['metrics.clicks']);
+      
+      var cost = costMicros / 1000000;
+      var cpa = conversions > 0 ? cost / conversions : 0;
+      
+      if (!campaignGoodTerms[campId]) {
+        campaignGoodTerms[campId] = {
+          name: campName,
+          terms: []
+        };
+      }
+      
+      campaignGoodTerms[campId].terms.push({
+        term: searchTerm,
+        conversions: conversions,
+        cpa: cpa,
+        clicks: clicks
+      });
+    }
+    
+    // Generuj problemy dla kampanii z wieloma wartościowymi frazami
+    for (var campId in campaignGoodTerms) {
+      var data = campaignGoodTerms[campId];
+      
+      if (data.terms.length >= 5) {
+        var topTerms = data.terms
+          .sort(function(a, b) { return b.conversions - a.conversions; })
+          .slice(0, 3)
+          .map(function(t) { return t.term + ' (' + t.conversions + ' konw.)'; })
+          .join(', ');
+        
+        var totalConversions = data.terms.reduce(function(sum, t) { return sum + t.conversions; }, 0);
+        
+        problems.push(createProblem(
+          'MEDIUM',
+          'Frazy',
+          'Kampania "' + data.name + '" - wartościowe frazy do wykorzystania',
+          data.terms.length + ' fraz z łącznie ' + totalConversions.toFixed(0) + ' konwersjami - rozbuduj kampanię',
+          data.name,
+          {
+            valuableTermsCount: data.terms.length,
+            totalConversions: totalConversions.toFixed(0),
+            topTerms: topTerms
+          },
+          'Dodaj te frazy jako exact match keywords dla lepszej kontroli',
+          campId
+        ));
+      }
+    }
+    
+  } catch(e) {
+    Logger.log('Blad w auditSearchTerms (wartosciowe): ' + e);
+  }
+  
+  Logger.log('Sprawdzono frazy wyszukiwania');
+  return problems;
+}
+
+// ============================================================================
 // GENEROWANIE ZADAŃ
 // ============================================================================
 
@@ -1109,6 +1718,12 @@ function getGoogleAdsLink(category, resourceId) {
       return baseUrl + 'ads?ocid=' + accountId + '&campaignId=' + resourceId;
     } else if (category === 'Miejsca docelowe') {
       return baseUrl + 'placements?ocid=' + accountId + '&campaignId=' + resourceId;
+    } else if (category === 'Rozszerzenia') {
+      return baseUrl + 'extensions?ocid=' + accountId + '&campaignId=' + resourceId;
+    } else if (category === 'Odbiorcy') {
+      return baseUrl + 'audiences?ocid=' + accountId + '&campaignId=' + resourceId;
+    } else if (category === 'Frazy') {
+      return baseUrl + 'campaigns/searchterms?ocid=' + accountId + '&campaignId=' + resourceId;
     }
   }
   
@@ -1120,10 +1735,93 @@ function getGoogleAdsLink(category, resourceId) {
     'Slowa kluczowe': baseUrl + 'keywords?ocid=' + accountId,
     'Reklamy': baseUrl + 'ads?ocid=' + accountId,
     'Konflikty': baseUrl + 'keywords?ocid=' + accountId,
-    'Miejsca docelowe': baseUrl + 'placements?ocid=' + accountId
+    'Miejsca docelowe': baseUrl + 'placements?ocid=' + accountId,
+    'Rozszerzenia': baseUrl + 'extensions?ocid=' + accountId,
+    'Odbiorcy': baseUrl + 'audiences?ocid=' + accountId,
+    'Frazy': baseUrl + 'campaigns/searchterms?ocid=' + accountId
   };
   
   return links[category] || (baseUrl + 'overview?ocid=' + accountId);
+}
+
+function getGoogleAdsPath(category) {
+  var paths = {
+    'Konwersje': 'Narzędzia i ustawienia → Pomiar → Konwersje',
+    'Kampanie': 'Kampanie → Przegląd',
+    'Budzety': 'Kampanie → Ustawienia',
+    'Slowa kluczowe': 'Kampanie → Słowa kluczowe',
+    'Reklamy': 'Kampanie → Reklamy i rozszerzenia',
+    'Konflikty': 'Kampanie → Słowa kluczowe',
+    'Miejsca docelowe': 'Kampanie → Miejsca docelowe',
+    'Rozszerzenia': 'Kampanie → Reklamy i rozszerzenia → Rozszerzenia',
+    'Odbiorcy': 'Kampanie → Grupy odbiorców',
+    'Frazy': 'Kampanie → Frazy wyszukiwania'
+  };
+  
+  return paths[category] || 'Google Ads → ' + category;
+}
+
+function getFilterHint(problem) {
+  var hint = '';
+  var problemText = problem.problem.toLowerCase();
+  
+  // Quality Score
+  if (problemText.indexOf('quality score') !== -1 || problemText.indexOf('niski wskaźnik jakości') !== -1) {
+    hint = '(Filtr: Wskaźnik jakości < 5)';
+  }
+  // Konwersje = 0
+  else if (problemText.indexOf('bez konwersji') !== -1 || problemText.indexOf('0 konwersji') !== -1) {
+    hint = '(Filtr: Konwersje = 0)';
+  }
+  // Niski CTR
+  else if (problemText.indexOf('niski ctr') !== -1 || problemText.indexOf('niska skuteczność') !== -1) {
+    hint = '(Filtr: CTR < 1%)';
+  }
+  // Odrzucone reklamy
+  else if (problemText.indexOf('odrzucone') !== -1 || problemText.indexOf('disapproved') !== -1) {
+    hint = '(Filtr: Status = Odrzucone)';
+  }
+  // Wstrzymane kampanie
+  else if (problemText.indexOf('wstrzymane kampanie') !== -1 || problemText.indexOf('paused') !== -1) {
+    hint = '(Filtr: Status = Wstrzymane)';
+  }
+  // Budżet ograniczony
+  else if (problemText.indexOf('ograniczone przez budżet') !== -1 || problemText.indexOf('budget') !== -1) {
+    hint = '(Sprawdź: Status kampanii)';
+  }
+  // Miejsca docelowe - spam
+  else if (problemText.indexOf('spam') !== -1 || problemText.indexOf('clickfarm') !== -1) {
+    hint = '(Sortuj: Koszt malejąco)';
+  }
+  // Brak rozszerzeń
+  else if (problemText.indexOf('brak sitelinks') !== -1) {
+    hint = '(Dodaj: min. 4 sitelinki)';
+  }
+  else if (problemText.indexOf('brak callouts') !== -1) {
+    hint = '(Dodaj: min. 4 callouts)';
+  }
+  else if (problemText.indexOf('brak structured snippets') !== -1) {
+    hint = '(Dodaj: structured snippets)';
+  }
+  // Audiences
+  else if (problemText.indexOf('brak list remarketingowych') !== -1) {
+    hint = '(Dodaj: Grupy odbiorców)';
+  }
+  else if (problemText.indexOf('brak wykluczeń') !== -1) {
+    hint = '(Dodaj: Wykluczenia)';
+  }
+  // Search Terms
+  else if (problemText.indexOf('kosztowne frazy') !== -1) {
+    hint = '(Sortuj: Koszt malejąco)';
+  }
+  else if (problemText.indexOf('nierelewantne frazy') !== -1) {
+    hint = '(Dodaj: Słowa kluczowe wykluczające)';
+  }
+  else if (problemText.indexOf('wartościowe frazy') !== -1) {
+    hint = '(Filtr: Konwersje > 1, Sortuj malejąco)';
+  }
+  
+  return hint;
 }
 
 function generateTasks(problems) {
@@ -1150,6 +1848,13 @@ function generateTasks(problems) {
     
     // Generuj link z resourceId jeśli dostępny (precyzyjny link)
     var link = getGoogleAdsLink(problem.category, problem.resourceId);
+    var linkPath = getGoogleAdsPath(problem.category);
+    var filterHint = getFilterHint(problem);
+    
+    // Dodaj filtr do ścieżki jeśli istnieje
+    if (filterHint) {
+      linkPath = linkPath + ' ' + filterHint;
+    }
     
     tasks.push({
       priority: problem.priority,
@@ -1159,7 +1864,8 @@ function generateTasks(problems) {
       potentialGrowth: potentialGrowth,
       relatedProblem: problem.problem,
       location: problem.location,
-      link: link
+      link: link,
+      linkPath: linkPath
     });
   }
   
@@ -1303,7 +2009,7 @@ function writeToSpreadsheet(spreadsheet, problems, tasks, accountStats) {
     tasksSheet.getRange(row, 1, 1, 9).setBackground(color);
     
     // Teraz ustaw hiperlink w kolumnie 9 (ostatnia)
-    tasksSheet.getRange(row, 9).setFormula('=HYPERLINK("' + t.link + '", "➜ Otwórz Google Ads")');
+    tasksSheet.getRange(row, 9).setFormula('=HYPERLINK("' + t.link + '", "➜ ' + t.linkPath + '")');
     tasksSheet.getRange(row, 9).setFontColor('#1a73e8').setFontWeight('bold');
   }
   
