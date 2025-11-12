@@ -1084,29 +1084,55 @@ function auditPlacements(days) {
       .withCondition('Status = ENABLED')
       .get();
     
+    var displayCampaignsCount = 0;
+    
     while (campaigns.hasNext()) {
       var campaign = campaigns.next();
-      var name = campaign.getName();
-      
-      // Sprawdz czy kampania ma wykluczone miejsca
-      var excludedPlacements = campaign.excludedPlacementList();
-      var hasExclusions = false;
-      
-      if (excludedPlacements) {
-        var placements = excludedPlacements.excludedPlacements().get();
-        hasExclusions = placements.hasNext();
-      }
-      
-      if (!hasExclusions) {
-        problems.push(createProblem(
-          'MEDIUM',
-          'Miejsca docelowe',
-          'Kampania Display "' + name + '" bez wykluczen miejsc',
-          'Brak wykluczen moze prowadzic do marnowania budzetu',
-          name,
-          {},
-          'Dodaj liste wykluczen (niskiej jakosci strony, aplikacje)'
-        ));
+      displayCampaignsCount++;
+    }
+    
+    // Sprawdzenie czy sa wykluczone miejsca docelowe (przez raport)
+    if (displayCampaignsCount > 0) {
+      try {
+        var excludedReport = AdsApp.report(
+          'SELECT CampaignName, Criteria ' +
+          'FROM CAMPAIGN_NEGATIVE_PLACEMENTS_PERFORMANCE_REPORT ' +
+          'WHERE CampaignStatus = ENABLED'
+        );
+        
+        var campaignsWithExclusions = {};
+        var excludedRows = excludedReport.rows();
+        while (excludedRows.hasNext()) {
+          var row = excludedRows.next();
+          var campName = row['CampaignName'];
+          campaignsWithExclusions[campName] = true;
+        }
+        
+        // Sprawdz ponownie kampanie i porownaj z wykluczeniami
+        var campaignsCheck = AdsApp.campaigns()
+          .withCondition('AdvertisingChannelType = DISPLAY')
+          .withCondition('Status = ENABLED')
+          .get();
+        
+        while (campaignsCheck.hasNext()) {
+          var camp = campaignsCheck.next();
+          var campName = camp.getName();
+          
+          if (!campaignsWithExclusions[campName]) {
+            problems.push(createProblem(
+              'MEDIUM',
+              'Miejsca docelowe',
+              'Kampania Display "' + campName + '" bez wykluczen miejsc',
+              'Brak wykluczen moze prowadzic do marnowania budzetu na spam/clickfarm',
+              campName,
+              {},
+              'Dodaj liste wykluczen (niskiej jakosci strony, aplikacje mobilne)'
+            ));
+          }
+        }
+      } catch(reportError) {
+        Logger.log('Blad sprawdzania wykluczen miejsc (raport niedostepny): ' + reportError);
+        // Raport moze byc niedostepny - nie zglosmy problemu
       }
     }
   } catch(e) {
